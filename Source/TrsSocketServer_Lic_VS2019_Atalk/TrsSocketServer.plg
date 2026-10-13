@@ -1,0 +1,89 @@
+<html>
+<body>
+<pre>
+<h1>Build Log</h1>
+<h3>
+--------------------Configuration: TrsSocketServer - Win32 Release--------------------
+</h3>
+<h3>Command Lines</h3>
+Creating command line "rc.exe /l 0x412 /fo"Release/TrsSocketServer.res" /d "NDEBUG" "E:\_Svn\Project\TrsSocketServer_Lic\TrsSocketServer.rc"" 
+Creating temporary file "C:\Users\jongkwi\AppData\Local\Temp\RSPFED5.tmp" with contents
+[
+/nologo /MT /W3 /GX /O2 /D "WIN32" /D "NDEBUG" /D "_WINDOWS" /D "_MBCS" /FR"Release/" /Fp"Release/TrsSocketServer.pch" /Yu"stdafx.h" /Fo"Release/" /Fd"Release/" /FD /c 
+"E:\_Svn\Project\TrsSocketServer_Lic\AlramWeb.cpp"
+"E:\_Svn\Project\TrsSocketServer_Lic\charconv.cpp"
+"E:\_Svn\Project\TrsSocketServer_Lic\ClientSocket.cpp"
+"E:\_Svn\Project\TrsSocketServer_Lic\DirectODBC.cpp"
+"E:\_Svn\Project\TrsSocketServer_Lic\ListenSocket.cpp"
+"E:\_Svn\Project\TrsSocketServer_Lic\SystemTray.cpp"
+"E:\_Svn\Project\TrsSocketServer_Lic\TrsSocketServer.cpp"
+"E:\_Svn\Project\TrsSocketServer_Lic\TrsSocketServerDlg.cpp"
+"E:\_Svn\Project\TrsSocketServer_Lic\UdpSocket.cpp"
+"E:\_Svn\Project\TrsSocketServer_Lic\URLEncode.cpp"
+]
+Creating command line "cl.exe @C:\Users\jongkwi\AppData\Local\Temp\RSPFED5.tmp" 
+Creating temporary file "C:\Users\jongkwi\AppData\Local\Temp\RSPFED6.tmp" with contents
+[
+/nologo /MT /W3 /GX /O2 /D "WIN32" /D "NDEBUG" /D "_WINDOWS" /D "_MBCS" /FR"Release/" /Fp"Release/TrsSocketServer.pch" /Yc"stdafx.h" /Fo"Release/" /Fd"Release/" /FD /c 
+"E:\_Svn\Project\TrsSocketServer_Lic\StdAfx.cpp"
+]
+Creating command line "cl.exe @C:\Users\jongkwi\AppData\Local\Temp\RSPFED6.tmp" 
+Creating temporary file "C:\Users\jongkwi\AppData\Local\Temp\RSPFED7.tmp" with contents
+[
+odbc32.lib odbccp32.lib /nologo /subsystem:windows /incremental:no /pdb:"Release/TrsSocketServer.pdb" /machine:I386 /out:"Release/TrsSocketServer.exe" 
+.\Release\AlramWeb.obj
+.\Release\charconv.obj
+.\Release\ClientSocket.obj
+.\Release\DirectODBC.obj
+.\Release\ListenSocket.obj
+.\Release\StdAfx.obj
+.\Release\SystemTray.obj
+.\Release\TrsSocketServer.obj
+.\Release\TrsSocketServerDlg.obj
+.\Release\UdpSocket.obj
+.\Release\URLEncode.obj
+.\Release\TrsSocketServer.res
+]
+Creating command line "link.exe @C:\Users\jongkwi\AppData\Local\Temp\RSPFED7.tmp"
+<h3>Output Window</h3>
+Compiling resources...
+Compiling...
+StdAfx.cpp
+Compiling...
+AlramWeb.cpp
+charconv.cpp
+ClientSocket.cpp
+DirectODBC.cpp
+ListenSocket.cpp
+SystemTray.cpp
+TrsSocketServer.cpp
+TrsSocketServerDlg.cpp
+UdpSocket.cpp
+URLEncode.cpp
+Generating Code...
+Linking...
+Creating temporary file "C:\Users\jongkwi\AppData\Local\Temp\RSPBC8.tmp" with contents
+[
+/nologo /o"Release/TrsSocketServer.bsc" 
+.\Release\StdAfx.sbr
+.\Release\AlramWeb.sbr
+.\Release\charconv.sbr
+.\Release\ClientSocket.sbr
+.\Release\DirectODBC.sbr
+.\Release\ListenSocket.sbr
+.\Release\SystemTray.sbr
+.\Release\TrsSocketServer.sbr
+.\Release\TrsSocketServerDlg.sbr
+.\Release\UdpSocket.sbr
+.\Release\URLEncode.sbr]
+Creating command line "bscmake.exe @C:\Users\jongkwi\AppData\Local\Temp\RSPBC8.tmp"
+Creating browse info file...
+<h3>Output Window</h3>
+
+
+
+<h3>Results</h3>
+TrsSocketServer.exe - 0 error(s), 0 warning(s)
+</pre>
+</body>
+</html>

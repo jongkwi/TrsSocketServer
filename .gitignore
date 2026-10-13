@@ -1,0 +1,44 @@
+# 버전관리 (SVN 병행)
+.svn/
+
+# C++ 빌드 산출물
+Source/**/Debug/
+Source/**/Release/
+Source/**/x64/
+Source/**/.vs/
+Source/**/ipch/
+*.obj
+*.pch
+*.pdb
+*.idb
+*.ilk
+*.exp
+*.tlog
+*.lastbuildstate
+*.ncb
+*.sdf
+*.suo
+*.user
+*.VC.db
+*.VC.opendb
+UpgradeLog*.htm
+
+# 로그
+logs/
+*.log
+
+# 백업/테스트
+_backup/
+_test/
+
+# 로컬 설정 / 비밀
+.env
+config.local.yaml
+*.local.ini
+
+# IDE / OS
+.vscode/
+.idea/
+*.swp
+Thumbs.db
+desktop.ini
