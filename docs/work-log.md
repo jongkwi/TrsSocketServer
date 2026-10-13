@@ -175,6 +175,10 @@
 ### 일일 요약·커밋 (추가)
 - `docs/작업요약_2026-10-13.md` 작성(초기화→분석→결정→운영 조사→구현 5단계→DB 이관 준비→다음 할 일). deep-analyze HTML 의 DB 비밀번호·sender key 마스킹 후 커밋 대상 전체 비밀 스캔 통과(원본 Windows 소스의 하드코딩은 기존 커밋 그대로). git 커밋·푸시 (사용자 요청)
 
+### VS2010 솔루션 (추가)
+- 사용자 요청(onmw 참조): `Source/onlic/win32/onlic/onlic.sln`(Format 11.00) + 라이브러리 5개 vcxproj/filters 는 onmw `win32/NcMiddleVC90` 에서 복사(GUID·상대경로 동일 깊이), `onlic/onlic.vcxproj(.filters)` 신규(소스 12·헤더 14·설정/DB 8, 필터 3개, MultiByte, `_DB_TYPE_POSTGRES;_SOCK_SELECT`, 라이브러리 ProjectReference)
+- 검증: 참조 경로 171개 존재, XML 정상, VS2019 MSBuild 로 로드(/pp) 및 ShareLib 빌드 성공(onmw 와 같은 MSB8012 경고). onlic 앱은 Linux 전용 코드라 Windows 빌드 불가(열람·편집용). 빌드 산출물 삭제, .gitignore 추가
+
 ### 다음 할 일
 - **Rocky 9 에서 빌드·테스트**: `cd linux && make` → 컴파일 오류 수정 → `cd test && make && ./framing_test` → `bin/onlic -l -c ../cfg/onlic.ini` 포그라운드 기동 → 시뮬레이터(라이선스 요청·UDP 이벤트·6770 뷰어)로 동작 확인
 - 문서: 프로토콜명세 §7.3 알림톡 문구 길이 1024 정정, 리눅스참조구조 §2 매핑표를 실제 파일명으로 갱신, `docs/기능목록.md` Z 체크리스트로 verify

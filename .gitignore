@@ -63,3 +63,14 @@ scripts/db_export.ini
 
 # DB export outputs (timestamp folders under scripts/)
 scripts/[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]_[0-9][0-9][0-9][0-9][0-9][0-9]/
+
+# onlic VS2010 build outputs
+Source/onlic/lib/debug/
+Source/onlic/lib/release/
+Source/onlic/bin/*.exe
+Source/onlic/bin/*.pdb
+Source/onlic/bin/*.ilk
+Source/onlic/win32/**/Debug/
+Source/onlic/win32/**/Release/
+*.sdf
+*.opensdf

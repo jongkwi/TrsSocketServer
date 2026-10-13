@@ -1,0 +1,154 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<!-- onlic.vcxproj : VS2010 (ToolsVersion 4.0). onmw win32/NcMiddleVC90/ncmw/ncmw.vcxproj 구조 복제
+     소스 열람·편집용. onlic 은 Linux(Rocky 9) 전용 코드(pthread/unistd/select/libcurl)라 Windows 빌드는 지원하지 않음 -->
+<Project DefaultTargets="Build" ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|Win32">
+      <Configuration>Debug</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|Win32">
+      <Configuration>Release</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{B6A2E4C1-3F7D-4E2A-9C51-0D8F7A6B2E91}</ProjectGuid>
+    <RootNamespace>onlic</RootNamespace>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <CharacterSet>MultiByte</CharacterSet>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <CharacterSet>MultiByte</CharacterSet>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup>
+    <_ProjectFileVersion>10.0.30319.1</_ProjectFileVersion>
+    <OutDir Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">$(SolutionDir)$(Configuration)\</OutDir>
+    <IntDir Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">$(Configuration)\</IntDir>
+    <LinkIncremental Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</LinkIncremental>
+    <OutDir Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">$(SolutionDir)$(Configuration)\</OutDir>
+    <IntDir Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">$(Configuration)\</IntDir>
+    <LinkIncremental Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">false</LinkIncremental>
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <ClCompile>
+      <Optimization>Disabled</Optimization>
+      <AdditionalIncludeDirectories>../../../include;../../../include/onlic;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>WIN32;_WIN32;_DEBUG;_CONSOLE;_CRT_SECURE_NO_WARNINGS;_WINSOCK_DEPRECATED_NO_WARNINGS;_DB_TYPE_POSTGRES;_SOCK_SELECT;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <MinimalRebuild>true</MinimalRebuild>
+      <BasicRuntimeChecks>EnableFastChecks</BasicRuntimeChecks>
+      <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
+      <WarningLevel>Level3</WarningLevel>
+      <DebugInformationFormat>EditAndContinue</DebugInformationFormat>
+    </ClCompile>
+    <Link>
+      <AdditionalDependencies>ws2_32.lib;iphlpapi.lib;winmm.lib;odbc32.lib;odbccp32.lib;ListObjectD.lib;LogObjectD.lib;ShareLibD.lib;TimerObjectD.lib;UrlEnDeD.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <OutputFile>../../../bin/$(ProjectName)D.exe</OutputFile>
+      <AdditionalLibraryDirectories>../../../lib/debug;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <SubSystem>Console</SubSystem>
+      <RandomizedBaseAddress>false</RandomizedBaseAddress>
+      <TargetMachine>MachineX86</TargetMachine>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <ClCompile>
+      <AdditionalIncludeDirectories>../../../include;../../../include/onlic;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>WIN32;_WIN32;NDEBUG;_CONSOLE;_CRT_SECURE_NO_WARNINGS;_WINSOCK_DEPRECATED_NO_WARNINGS;_DB_TYPE_POSTGRES;_SOCK_SELECT;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <WarningLevel>Level3</WarningLevel>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+    </ClCompile>
+    <Link>
+      <AdditionalDependencies>ws2_32.lib;iphlpapi.lib;winmm.lib;odbc32.lib;odbccp32.lib;ListObject.lib;LogObject.lib;ShareLib.lib;TimerObject.lib;UrlEnDe.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <OutputFile>../../../bin/$(ProjectName).exe</OutputFile>
+      <AdditionalLibraryDirectories>../../../lib/release;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <SubSystem>Console</SubSystem>
+      <OptimizeReferences>true</OptimizeReferences>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <RandomizedBaseAddress>false</RandomizedBaseAddress>
+      <TargetMachine>MachineX86</TargetMachine>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClCompile Include="..\..\..\source\onlic\AlarmProc.cpp" />
+    <ClCompile Include="..\..\..\source\onlic\ConfigLoad.cpp" />
+    <ClCompile Include="..\..\..\source\onlic\DbLic.cpp" />
+    <ClCompile Include="..\..\..\source\onlic\DirectODBC.cpp" />
+    <ClCompile Include="..\..\..\source\onlic\Framing.cpp" />
+    <ClCompile Include="..\..\..\source\onlic\HttpWaitStack.cpp" />
+    <ClCompile Include="..\..\..\source\onlic\MwTimer.cpp" />
+    <ClCompile Include="..\..\..\source\onlic\RecvWaitStack.cpp" />
+    <ClCompile Include="..\..\..\source\onlic\SockProcLic.cpp" />
+    <ClCompile Include="..\..\..\source\onlic\SocketThread.cpp" />
+    <ClCompile Include="..\..\..\source\onlic\SystemLoad.cpp" />
+    <ClCompile Include="..\..\..\source\onlic\onlicmain.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\..\..\include\onlic\AlarmProc.h" />
+    <ClInclude Include="..\..\..\include\onlic\ConfigLoad.h" />
+    <ClInclude Include="..\..\..\include\onlic\DbLic.h" />
+    <ClInclude Include="..\..\..\include\onlic\DirectODBC.h" />
+    <ClInclude Include="..\..\..\include\onlic\Framing.h" />
+    <ClInclude Include="..\..\..\include\onlic\HttpWaitStack.h" />
+    <ClInclude Include="..\..\..\include\onlic\MwTimer.h" />
+    <ClInclude Include="..\..\..\include\onlic\RecvWaitStack.h" />
+    <ClInclude Include="..\..\..\include\onlic\SockProcLic.h" />
+    <ClInclude Include="..\..\..\include\onlic\SocketThread.h" />
+    <ClInclude Include="..\..\..\include\onlic\SystemLoad.h" />
+    <ClInclude Include="..\..\..\include\onlic\onlicDefine.h" />
+    <ClInclude Include="..\..\..\include\onlic\onlicmain.h" />
+    <ClInclude Include="..\..\..\include\onlic\struct_def.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="..\..\..\cfg\onlic.ini.sample" />
+    <None Include="..\..\..\linux\Makefile_64bit" />
+    <None Include="..\..\..\linux\Makefile" />
+    <None Include="..\..\..\README.md" />
+    <None Include="..\..\..\db\01_nasa_license_schema.sql" />
+    <None Include="..\..\..\db\README.md" />
+    <None Include="..\..\..\test\framing_sim.py" />
+    <None Include="..\..\..\test\framing_test.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\ListObject\ListObject.vcxproj">
+      <Project>{e41c09d8-08a7-48ff-84e6-d40aa880dcf8}</Project>
+      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+    </ProjectReference>
+    <ProjectReference Include="..\LogObject\LogObject.vcxproj">
+      <Project>{f82be613-8365-4855-bb98-2cc93a6734f7}</Project>
+      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+    </ProjectReference>
+    <ProjectReference Include="..\ShareLib\ShareLib.vcxproj">
+      <Project>{f49ccca7-6682-4f24-bfc5-39931608f9c4}</Project>
+      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+    </ProjectReference>
+    <ProjectReference Include="..\TimerObject\TimerObject.vcxproj">
+      <Project>{d3dbcf37-1d5b-4fa0-9085-7098b21dc588}</Project>
+      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+    </ProjectReference>
+    <ProjectReference Include="..\UrlEnDe\UrlEnDe.vcxproj">
+      <Project>{51ec5795-5f9e-4a93-9cd2-035e4b502c56}</Project>
+      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+    </ProjectReference>
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+  </ImportGroup>
+</Project>

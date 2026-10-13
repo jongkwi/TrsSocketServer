@@ -14,6 +14,7 @@ Windows MFC `TrsSocketServer`(1.0.0.7)를 **기존 클라이언트 무변경**�
 | `cfg/` | `onlic.ini` (DB 접속정보 포함 → **커밋 금지**, `onlic.ini.sample`만 커밋) | 신규 |
 | `lib/`, `bin/`, `log/` | 빌드 산출물·로그 (git 제외) | |
 | `doc/` | onmw 운영 스크립트 참고 사본 (`runmw`, `ps_mw.chk.sh`, `mwcron`) | 참고용 |
+| `win32/onlic/onlic.sln` | **Visual Studio 2010** 솔루션 (onmw `win32/NcMiddleVC90` 구조 복제). 라이브러리 5개 프로젝트 + `onlic` 앱 프로젝트(소스·헤더·설정/DB 파일). 열람·편집용 — onlic 앱은 Linux 전용 코드라 Windows 빌드 불가, 라이브러리는 빌드됨 | 신규 |
 | `test/` | 프레이밍·프로토콜 단위 테스트, 클라이언트 시뮬레이터 | 신규 |
 
 ## 인코딩 주의

@@ -1,0 +1,125 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|Win32">
+      <Configuration>Debug</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|Win32">
+      <Configuration>Release</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{F49CCCA7-6682-4F24-BFC5-39931608F9C4}</ProjectGuid>
+    <RootNamespace>ShareLib</RootNamespace>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <CharacterSet>NotSet</CharacterSet>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <CharacterSet>NotSet</CharacterSet>
+    
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup>
+    <_ProjectFileVersion>10.0.40219.1</_ProjectFileVersion>
+    <OutDir Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">$(SolutionDir)$(Configuration)\</OutDir>
+    <IntDir Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">$(Configuration)\</IntDir>
+    <OutDir Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">$(SolutionDir)$(Configuration)\</OutDir>
+    <IntDir Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">$(Configuration)\</IntDir>
+    <CodeAnalysisRuleSet Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">AllRules.ruleset</CodeAnalysisRuleSet>
+    <CodeAnalysisRules Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" />
+    <CodeAnalysisRuleAssemblies Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" />
+    <CodeAnalysisRuleSet Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">AllRules.ruleset</CodeAnalysisRuleSet>
+    <CodeAnalysisRules Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" />
+    <CodeAnalysisRuleAssemblies Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" />
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <ClCompile>
+      <Optimization>Disabled</Optimization>
+      <AdditionalIncludeDirectories>../../../include;../../../include/ShareLib;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>WIN32;_DEBUG;_LIB;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <MinimalRebuild>true</MinimalRebuild>
+      <BasicRuntimeChecks>EnableFastChecks</BasicRuntimeChecks>
+      <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
+      <WarningLevel>Level3</WarningLevel>
+      <DebugInformationFormat>EditAndContinue</DebugInformationFormat>
+    </ClCompile>
+    <Lib>
+      <OutputFile>../../../lib/debug/$(ProjectName)D.lib</OutputFile>
+    </Lib>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <ClCompile>
+      <AdditionalIncludeDirectories>../../../include;../../../include/ShareLib;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>WIN32;NDEBUG;_LIB;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <WarningLevel>Level3</WarningLevel>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+    </ClCompile>
+    <Lib>
+      <OutputFile>../../../lib/release/$(ProjectName).lib</OutputFile>
+    </Lib>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClCompile Include="..\..\..\source\ShareLib\copyfile.cpp" />
+    <ClCompile Include="..\..\..\source\ShareLib\Error.cpp" />
+    <ClCompile Include="..\..\..\source\ShareLib\Fourier.cpp" />
+    <ClCompile Include="..\..\..\source\ShareLib\GetPrivateProfile.cpp" />
+    <ClCompile Include="..\..\..\source\ShareLib\Heap_Dump.cpp" />
+    <ClCompile Include="..\..\..\source\ShareLib\md5.cpp" />
+    <ClCompile Include="..\..\..\source\ShareLib\nprintf.cpp" />
+    <ClCompile Include="..\..\..\source\ShareLib\ReadNicMac.cpp" />
+    <ClCompile Include="..\..\..\source\ShareLib\ReceiveN.cpp" />
+    <ClCompile Include="..\..\..\source\ShareLib\strcasecmp.cpp" />
+    <ClCompile Include="..\..\..\source\ShareLib\strfnc_st.cpp" />
+    <ClCompile Include="..\..\..\source\ShareLib\utf8.cpp" />
+    <ClCompile Include="..\..\..\source\ShareLib\UtfIConv.cpp" />
+    <ClCompile Include="..\..\..\source\ShareLib\UtilReboot.cpp" />
+    <ClCompile Include="..\..\..\source\ShareLib\WinMalloc.cpp" />
+    <ClCompile Include="..\..\..\source\ShareLib\wrappthread.cpp" />
+    <ClCompile Include="..\..\..\source\ShareLib\wrapsock.cpp" />
+    <ClCompile Include="..\..\..\source\ShareLib\WriteN.cpp" />
+    <ClCompile Include="..\..\..\source\ShareLib\UserTime.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\..\..\include\ShareLib\copyfile.h" />
+    <ClInclude Include="..\..\..\include\ShareLib\Error.h" />
+    <ClInclude Include="..\..\..\include\ShareLib\Fourier.h" />
+    <ClInclude Include="..\..\..\include\ShareLib\GetPrivateProfile.h" />
+    <ClInclude Include="..\..\..\include\ShareLib\Heap_Dump.h" />
+    <ClInclude Include="..\..\..\include\ShareLib\md5.h" />
+    <ClInclude Include="..\..\..\include\ShareLib\nprintf.h" />
+    <ClInclude Include="..\..\..\include\ShareLib\ReadNicMac.h" />
+    <ClInclude Include="..\..\..\include\ShareLib\ReceiveN.h" />
+    <ClInclude Include="..\..\..\include\ShareLib\ShareLib.h" />
+    <ClInclude Include="..\..\..\include\ShareLib\strcasecmp.h" />
+    <ClInclude Include="..\..\..\include\ShareLib\strfnc_st.h" />
+    <ClInclude Include="..\..\..\include\ShareLib\UserTime.h" />
+    <ClInclude Include="..\..\..\include\ShareLib\utf8.h" />
+    <ClInclude Include="..\..\..\include\ShareLib\UtfIConv.h" />
+    <ClInclude Include="..\..\..\include\ShareLib\UtilReboot.h" />
+    <ClInclude Include="..\..\..\include\ShareLib\WinMalloc.h" />
+    <ClInclude Include="..\..\..\include\ShareLib\wrappthread.h" />
+    <ClInclude Include="..\..\..\include\ShareLib\wrapsock.h" />
+    <ClInclude Include="..\..\..\include\ShareLib\WriteN.h" />
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+  </ImportGroup>
+</Project>
