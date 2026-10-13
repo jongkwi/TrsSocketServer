@@ -1,0 +1,814 @@
+{
+  "_meta": {
+    "project": "TrsSocketServer_Lic_VS2019_Atalk",
+    "analyzed_at": "2026-10-13 10:31:56",
+    "total_files": 25,
+    "total_lines": 6147,
+    "total_code_lines": 4139,
+    "total_functions": 12,
+    "total_structs": 39,
+    "description": "Claude가 새 세션에서 이 파일을 읽으면 소스 분석 없이 프로젝트 구조를 즉시 파악 가능"
+  },
+  "architecture": {
+    "modules": {
+      "ShareLib": {
+        "files": [
+          "AlramWeb.cpp",
+          "AlramWeb.h",
+          "DbgOut_S.h",
+          "StdAfx.cpp",
+          "StdAfx.h",
+          "URLEncode.cpp",
+          "URLEncode.h",
+          "charconv.cpp",
+          "charconv.h",
+          "resource.h"
+        ],
+        "code_lines": 746,
+        "functions": 6,
+        "file_count": 10
+      },
+      "Socket_Util": {
+        "files": [
+          "ClientSocket.cpp",
+          "ClientSocket.h",
+          "TrsSocketServer.cpp",
+          "TrsSocketServer.h",
+          "TrsSocketServerDlg.cpp",
+          "TrsSocketServerDlg.h",
+          "UdpSocket.cpp",
+          "UdpSocket.h"
+        ],
+        "code_lines": 1937,
+        "functions": 3,
+        "file_count": 8
+      },
+      "Database": {
+        "files": [
+          "DirectODBC.cpp",
+          "DirectODBC.h"
+        ],
+        "code_lines": 678,
+        "functions": 1,
+        "file_count": 2
+      },
+      "Queue_List": {
+        "files": [
+          "ListenSocket.cpp",
+          "ListenSocket.h"
+        ],
+        "code_lines": 41,
+        "functions": 0,
+        "file_count": 2
+      },
+      "Definition": {
+        "files": [
+          "MyDefine.h"
+        ],
+        "code_lines": 393,
+        "functions": 0,
+        "file_count": 1
+      },
+      "Config_System": {
+        "files": [
+          "SystemTray.cpp",
+          "SystemTray.h"
+        ],
+        "code_lines": 344,
+        "functions": 2,
+        "file_count": 2
+      }
+    },
+    "threads": [],
+    "mutexes": {},
+    "db_mapping": {},
+    "sockets": [
+      {
+        "file": "TrsSocketServer.cpp",
+        "type": "accept",
+        "line": 282,
+        "detail": ""
+      },
+      {
+        "file": "TrsSocketServerDlg.cpp",
+        "type": "connect",
+        "line": 329,
+        "detail": ""
+      }
+    ],
+    "globals_count": 0
+  },
+  "security": {
+    "critical": 0,
+    "high": 222,
+    "medium": 14,
+    "total": 236,
+    "top_issues": [
+      {
+        "type": "BUFFER_OVERFLOW",
+        "file": "AlramWeb.cpp",
+        "line": 116,
+        "desc": "strcpy 사용 (strncpy/strcpy_st 권장)"
+      },
+      {
+        "type": "BUFFER_OVERFLOW",
+        "file": "AlramWeb.cpp",
+        "line": 139,
+        "desc": "strcpy 사용 (strncpy/strcpy_st 권장)"
+      },
+      {
+        "type": "BUFFER_OVERFLOW",
+        "file": "AlramWeb.cpp",
+        "line": 140,
+        "desc": "strcpy 사용 (strncpy/strcpy_st 권장)"
+      },
+      {
+        "type": "BUFFER_OVERFLOW",
+        "file": "AlramWeb.cpp",
+        "line": 141,
+        "desc": "strcpy 사용 (strncpy/strcpy_st 권장)"
+      },
+      {
+        "type": "BUFFER_OVERFLOW",
+        "file": "AlramWeb.cpp",
+        "line": 142,
+        "desc": "strcpy 사용 (strncpy/strcpy_st 권장)"
+      },
+      {
+        "type": "BUFFER_OVERFLOW",
+        "file": "AlramWeb.cpp",
+        "line": 143,
+        "desc": "strcpy 사용 (strncpy/strcpy_st 권장)"
+      },
+      {
+        "type": "BUFFER_OVERFLOW",
+        "file": "AlramWeb.cpp",
+        "line": 314,
+        "desc": "sprintf 사용 (snprintf 권장)"
+      },
+      {
+        "type": "BUFFER_OVERFLOW",
+        "file": "AlramWeb.cpp",
+        "line": 317,
+        "desc": "sprintf 사용 (snprintf 권장)"
+      },
+      {
+        "type": "BUFFER_OVERFLOW",
+        "file": "ClientSocket.cpp",
+        "line": 59,
+        "desc": "sprintf 사용 (snprintf 권장)"
+      },
+      {
+        "type": "BUFFER_OVERFLOW",
+        "file": "ClientSocket.cpp",
+        "line": 69,
+        "desc": "sprintf 사용 (snprintf 권장)"
+      },
+      {
+        "type": "BUFFER_OVERFLOW",
+        "file": "DirectODBC.cpp",
+        "line": 401,
+        "desc": "strcpy 사용 (strncpy/strcpy_st 권장)"
+      },
+      {
+        "type": "BUFFER_OVERFLOW",
+        "file": "DirectODBC.cpp",
+        "line": 505,
+        "desc": "strcpy 사용 (strncpy/strcpy_st 권장)"
+      },
+      {
+        "type": "BUFFER_OVERFLOW",
+        "file": "DirectODBC.cpp",
+        "line": 506,
+        "desc": "strcpy 사용 (strncpy/strcpy_st 권장)"
+      },
+      {
+        "type": "BUFFER_OVERFLOW",
+        "file": "DirectODBC.cpp",
+        "line": 507,
+        "desc": "strcpy 사용 (strncpy/strcpy_st 권장)"
+      },
+      {
+        "type": "BUFFER_OVERFLOW",
+        "file": "DirectODBC.cpp",
+        "line": 508,
+        "desc": "strcpy 사용 (strncpy/strcpy_st 권장)"
+      },
+      {
+        "type": "BUFFER_OVERFLOW",
+        "file": "DirectODBC.cpp",
+        "line": 509,
+        "desc": "strcpy 사용 (strncpy/strcpy_st 권장)"
+      },
+      {
+        "type": "BUFFER_OVERFLOW",
+        "file": "DirectODBC.cpp",
+        "line": 510,
+        "desc": "strcpy 사용 (strncpy/strcpy_st 권장)"
+      },
+      {
+        "type": "BUFFER_OVERFLOW",
+        "file": "DirectODBC.cpp",
+        "line": 569,
+        "desc": "strcpy 사용 (strncpy/strcpy_st 권장)"
+      },
+      {
+        "type": "BUFFER_OVERFLOW",
+        "file": "DirectODBC.cpp",
+        "line": 570,
+        "desc": "strcpy 사용 (strncpy/strcpy_st 권장)"
+      },
+      {
+        "type": "BUFFER_OVERFLOW",
+        "file": "DirectODBC.cpp",
+        "line": 571,
+        "desc": "strcpy 사용 (strncpy/strcpy_st 권장)"
+      },
+      {
+        "type": "BUFFER_OVERFLOW",
+        "file": "DirectODBC.cpp",
+        "line": 629,
+        "desc": "strcpy 사용 (strncpy/strcpy_st 권장)"
+      },
+      {
+        "type": "BUFFER_OVERFLOW",
+        "file": "DirectODBC.cpp",
+        "line": 630,
+        "desc": "strcpy 사용 (strncpy/strcpy_st 권장)"
+      },
+      {
+        "type": "BUFFER_OVERFLOW",
+        "file": "DirectODBC.cpp",
+        "line": 631,
+        "desc": "strcpy 사용 (strncpy/strcpy_st 권장)"
+      },
+      {
+        "type": "BUFFER_OVERFLOW",
+        "file": "DirectODBC.cpp",
+        "line": 632,
+        "desc": "strcpy 사용 (strncpy/strcpy_st 권장)"
+      },
+      {
+        "type": "SQL_INJECTION",
+        "file": "DirectODBC.cpp",
+        "line": 649,
+        "desc": "SQL 동적 조립 - Prepared Statement 미사용"
+      },
+      {
+        "type": "BUFFER_OVERFLOW",
+        "file": "DirectODBC.cpp",
+        "line": 649,
+        "desc": "sprintf 사용 (snprintf 권장)"
+      },
+      {
+        "type": "SQL_INJECTION",
+        "file": "DirectODBC.cpp",
+        "line": 657,
+        "desc": "SQL 동적 조립 - Prepared Statement 미사용"
+      },
+      {
+        "type": "BUFFER_OVERFLOW",
+        "file": "DirectODBC.cpp",
+        "line": 657,
+        "desc": "sprintf 사용 (snprintf 권장)"
+      },
+      {
+        "type": "BUFFER_OVERFLOW",
+        "file": "DirectODBC.cpp",
+        "line": 754,
+        "desc": "sprintf 사용 (snprintf 권장)"
+      },
+      {
+        "type": "BUFFER_OVERFLOW",
+        "file": "DirectODBC.cpp",
+        "line": 762,
+        "desc": "sprintf 사용 (snprintf 권장)"
+      }
+    ]
+  },
+  "quality": {
+    "total_raw": 62,
+    "total_verified": 49,
+    "false_positive": 13,
+    "by_type": {
+      "A1_NEW_NULL": 11,
+      "H2_DB_RETURN": 17,
+      "A3_USE_AFTER_FREE": 1,
+      "A1_NULL_CHECK": 2,
+      "B4_NO_INIT": 2,
+      "B5_ARRAY_BOUND": 1,
+      "I2_STRING_TIME": 4,
+      "UNSAFE_CONVERT": 6,
+      "F2_PARTIAL_SEND": 5
+    }
+  },
+  "functions": {
+    "top_by_size": [
+      {
+        "name": "AlarmWorkerThread",
+        "file": "AlramWeb.cpp",
+        "line": 34,
+        "lines": 33
+      },
+      {
+        "name": "DbgOutLastError",
+        "file": "DbgOut_S.h",
+        "line": 85,
+        "lines": 30
+      },
+      {
+        "name": "trim",
+        "file": "DirectODBC.cpp",
+        "line": 16,
+        "lines": 20
+      },
+      {
+        "name": "DbgOut",
+        "file": "DbgOut_S.h",
+        "line": 59,
+        "lines": 14
+      },
+      {
+        "name": "DbgOutA",
+        "file": "DbgOut_S.h",
+        "line": 11,
+        "lines": 10
+      },
+      {
+        "name": "DbgOutW",
+        "file": "DbgOut_S.h",
+        "line": 35,
+        "lines": 10
+      },
+      {
+        "name": "CATCH",
+        "file": "TrsSocketServer.cpp",
+        "line": 532,
+        "lines": 2
+      },
+      {
+        "name": "CATCH",
+        "file": "TrsSocketServer.cpp",
+        "line": 569,
+        "lines": 2
+      },
+      {
+        "name": "CATCH",
+        "file": "TrsSocketServer.cpp",
+        "line": 609,
+        "lines": 2
+      },
+      {
+        "name": "Enabled",
+        "file": "SystemTray.h",
+        "line": 46,
+        "lines": 0
+      },
+      {
+        "name": "Visible",
+        "file": "SystemTray.h",
+        "line": 47,
+        "lines": 0
+      },
+      {
+        "name": "CURLEncode",
+        "file": "URLEncode.h",
+        "line": 22,
+        "lines": 0
+      }
+    ],
+    "complexity_top": [
+      {
+        "file": "TrsSocketServer.cpp",
+        "complexity": 242,
+        "code_lines": 1454
+      },
+      {
+        "file": "DirectODBC.cpp",
+        "complexity": 91,
+        "code_lines": 623
+      },
+      {
+        "file": "AlramWeb.cpp",
+        "complexity": 38,
+        "code_lines": 216
+      },
+      {
+        "file": "SystemTray.cpp",
+        "complexity": 37,
+        "code_lines": 286
+      },
+      {
+        "file": "URLEncode.cpp",
+        "complexity": 29,
+        "code_lines": 204
+      },
+      {
+        "file": "TrsSocketServerDlg.cpp",
+        "complexity": 22,
+        "code_lines": 211
+      },
+      {
+        "file": "charconv.cpp",
+        "complexity": 11,
+        "code_lines": 88
+      },
+      {
+        "file": "StdAfx.h",
+        "complexity": 6,
+        "code_lines": 33
+      },
+      {
+        "file": "TrsSocketServer.h",
+        "complexity": 6,
+        "code_lines": 73
+      },
+      {
+        "file": "ClientSocket.cpp",
+        "complexity": 5,
+        "code_lines": 65
+      },
+      {
+        "file": "DbgOut_S.h",
+        "complexity": 5,
+        "code_lines": 87
+      },
+      {
+        "file": "SystemTray.h",
+        "complexity": 4,
+        "code_lines": 58
+      },
+      {
+        "file": "AlramWeb.h",
+        "complexity": 3,
+        "code_lines": 57
+      },
+      {
+        "file": "ClientSocket.h",
+        "complexity": 3,
+        "code_lines": 22
+      },
+      {
+        "file": "DirectODBC.h",
+        "complexity": 3,
+        "code_lines": 55
+      }
+    ]
+  },
+  "database": {
+    "total_queries": 76,
+    "query_types": {
+      "DELETE": 19,
+      "INSERT": 22,
+      "SELECT": 26,
+      "UPDATE": 9
+    },
+    "table_frequency": {
+      "CallCenter_Link": 24,
+      "SDK_SMS_SEND": 5,
+      "SITE_SMS_USER": 4,
+      "SITE_SmsExcludeTime": 2,
+      "SITE_EMAIL_USER": 1,
+      "IPCS_LOG": 1,
+      "lic_access_list": 1,
+      "SITE_SMS_BASIC_USER": 1,
+      "SITE_SMS_BASIC": 1,
+      "onpia_reschk_log": 1
+    }
+  },
+  "state_machine": {
+    "state_checks": {},
+    "state_transitions": {}
+  },
+  "risks": {
+    "resource_imbalance": [],
+    "deadlock_risks": []
+  },
+  "file_stats": [
+    {
+      "file": "TrsSocketServer.cpp",
+      "total": 1998,
+      "code": 1454,
+      "comment": 83,
+      "functions": 3,
+      "security": 194,
+      "quality": 33,
+      "complexity": 242,
+      "module": "Socket_Util",
+      "comment_ratio": 5.4,
+      "max_nesting": 8
+    },
+    {
+      "file": "DirectODBC.cpp",
+      "total": 828,
+      "code": 623,
+      "comment": 21,
+      "functions": 1,
+      "security": 20,
+      "quality": 17,
+      "complexity": 91,
+      "module": "Database",
+      "comment_ratio": 3.3,
+      "max_nesting": 5
+    },
+    {
+      "file": "MyDefine.h",
+      "total": 488,
+      "code": 393,
+      "comment": 11,
+      "functions": 0,
+      "security": 0,
+      "quality": 2,
+      "complexity": 1,
+      "module": "Definition",
+      "comment_ratio": 2.7,
+      "max_nesting": 1
+    },
+    {
+      "file": "SystemTray.cpp",
+      "total": 464,
+      "code": 286,
+      "comment": 84,
+      "functions": 0,
+      "security": 0,
+      "quality": 1,
+      "complexity": 37,
+      "module": "Config_System",
+      "comment_ratio": 22.7,
+      "max_nesting": 3
+    },
+    {
+      "file": "AlramWeb.cpp",
+      "total": 388,
+      "code": 216,
+      "comment": 69,
+      "functions": 1,
+      "security": 8,
+      "quality": 3,
+      "complexity": 38,
+      "module": "ShareLib",
+      "comment_ratio": 24.2,
+      "max_nesting": 4
+    },
+    {
+      "file": "TrsSocketServerDlg.cpp",
+      "total": 443,
+      "code": 211,
+      "comment": 132,
+      "functions": 0,
+      "security": 2,
+      "quality": 4,
+      "complexity": 22,
+      "module": "Socket_Util",
+      "comment_ratio": 38.5,
+      "max_nesting": 3
+    },
+    {
+      "file": "URLEncode.cpp",
+      "total": 259,
+      "code": 204,
+      "comment": 25,
+      "functions": 0,
+      "security": 10,
+      "quality": 2,
+      "complexity": 29,
+      "module": "ShareLib",
+      "comment_ratio": 10.9,
+      "max_nesting": 4
+    },
+    {
+      "file": "charconv.cpp",
+      "total": 119,
+      "code": 88,
+      "comment": 15,
+      "functions": 0,
+      "security": 0,
+      "quality": 0,
+      "complexity": 11,
+      "module": "ShareLib",
+      "comment_ratio": 14.6,
+      "max_nesting": 2
+    },
+    {
+      "file": "DbgOut_S.h",
+      "total": 128,
+      "code": 87,
+      "comment": 6,
+      "functions": 4,
+      "security": 0,
+      "quality": 0,
+      "complexity": 5,
+      "module": "ShareLib",
+      "comment_ratio": 6.5,
+      "max_nesting": 2
+    },
+    {
+      "file": "TrsSocketServer.h",
+      "total": 126,
+      "code": 73,
+      "comment": 18,
+      "functions": 0,
+      "security": 0,
+      "quality": 0,
+      "complexity": 6,
+      "module": "Socket_Util",
+      "comment_ratio": 19.8,
+      "max_nesting": 3
+    },
+    {
+      "file": "ClientSocket.cpp",
+      "total": 94,
+      "code": 65,
+      "comment": 12,
+      "functions": 0,
+      "security": 2,
+      "quality": 0,
+      "complexity": 5,
+      "module": "Socket_Util",
+      "comment_ratio": 15.6,
+      "max_nesting": 3
+    },
+    {
+      "file": "SystemTray.h",
+      "total": 125,
+      "code": 58,
+      "comment": 44,
+      "functions": 2,
+      "security": 0,
+      "quality": 0,
+      "complexity": 4,
+      "module": "Config_System",
+      "comment_ratio": 43.1,
+      "max_nesting": 3
+    },
+    {
+      "file": "AlramWeb.h",
+      "total": 99,
+      "code": 57,
+      "comment": 8,
+      "functions": 0,
+      "security": 0,
+      "quality": 0,
+      "complexity": 3,
+      "module": "ShareLib",
+      "comment_ratio": 12.3,
+      "max_nesting": 1
+    },
+    {
+      "file": "DirectODBC.h",
+      "total": 100,
+      "code": 55,
+      "comment": 18,
+      "functions": 0,
+      "security": 0,
+      "quality": 0,
+      "complexity": 3,
+      "module": "Database",
+      "comment_ratio": 24.7,
+      "max_nesting": 3
+    },
+    {
+      "file": "UdpSocket.h",
+      "total": 82,
+      "code": 50,
+      "comment": 18,
+      "functions": 0,
+      "security": 0,
+      "quality": 0,
+      "complexity": 3,
+      "module": "Socket_Util",
+      "comment_ratio": 26.5,
+      "max_nesting": 3
+    },
+    {
+      "file": "TrsSocketServerDlg.h",
+      "total": 67,
+      "code": 38,
+      "comment": 17,
+      "functions": 0,
+      "security": 0,
+      "quality": 0,
+      "complexity": 3,
+      "module": "Socket_Util",
+      "comment_ratio": 30.9,
+      "max_nesting": 3
+    },
+    {
+      "file": "StdAfx.h",
+      "total": 57,
+      "code": 33,
+      "comment": 6,
+      "functions": 0,
+      "security": 0,
+      "quality": 0,
+      "complexity": 6,
+      "module": "ShareLib",
+      "comment_ratio": 15.4,
+      "max_nesting": 0
+    },
+    {
+      "file": "resource.h",
+      "total": 35,
+      "code": 27,
+      "comment": 6,
+      "functions": 0,
+      "security": 0,
+      "quality": 0,
+      "complexity": 2,
+      "module": "ShareLib",
+      "comment_ratio": 18.2,
+      "max_nesting": 0
+    },
+    {
+      "file": "ListenSocket.cpp",
+      "total": 44,
+      "code": 24,
+      "comment": 10,
+      "functions": 0,
+      "security": 0,
+      "quality": 0,
+      "complexity": 2,
+      "module": "Queue_List",
+      "comment_ratio": 29.4,
+      "max_nesting": 2
+    },
+    {
+      "file": "UdpSocket.cpp",
+      "total": 44,
+      "code": 24,
+      "comment": 10,
+      "functions": 0,
+      "security": 0,
+      "quality": 0,
+      "complexity": 2,
+      "module": "Socket_Util",
+      "comment_ratio": 29.4,
+      "max_nesting": 2
+    },
+    {
+      "file": "ClientSocket.h",
+      "total": 54,
+      "code": 22,
+      "comment": 18,
+      "functions": 0,
+      "security": 0,
+      "quality": 0,
+      "complexity": 3,
+      "module": "Socket_Util",
+      "comment_ratio": 45.0,
+      "max_nesting": 3
+    },
+    {
+      "file": "URLEncode.h",
+      "total": 33,
+      "code": 22,
+      "comment": 5,
+      "functions": 1,
+      "security": 0,
+      "quality": 0,
+      "complexity": 1,
+      "module": "ShareLib",
+      "comment_ratio": 18.5,
+      "max_nesting": 1
+    },
+    {
+      "file": "ListenSocket.h",
+      "total": 48,
+      "code": 17,
+      "comment": 18,
+      "functions": 0,
+      "security": 0,
+      "quality": 0,
+      "complexity": 3,
+      "module": "Queue_List",
+      "comment_ratio": 51.4,
+      "max_nesting": 3
+    },
+    {
+      "file": "charconv.h",
+      "total": 15,
+      "code": 11,
+      "comment": 0,
+      "functions": 0,
+      "security": 0,
+      "quality": 0,
+      "complexity": 1,
+      "module": "ShareLib",
+      "comment_ratio": 0.0,
+      "max_nesting": 0
+    },
+    {
+      "file": "StdAfx.cpp",
+      "total": 9,
+      "code": 1,
+      "comment": 3,
+      "functions": 0,
+      "security": 0,
+      "quality": 0,
+      "complexity": 1,
+      "module": "ShareLib",
+      "comment_ratio": 75.0,
+      "max_nesting": 0
+    }
+  ]
+}

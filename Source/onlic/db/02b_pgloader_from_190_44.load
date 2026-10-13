@@ -1,0 +1,12 @@
+-- 02b_pgloader_from_190_44.load : 190.44 Nasa_License → nasa_license (라이선스 테이블. nasa_lic 은 44 가 원본, 7 의 사본은 버림)
+LOAD DATABASE
+     FROM mssql://lic2:PASSWORD@203.239.190.44:34333/Nasa_License
+     INTO postgresql://onlic:PASSWORD@127.0.0.1:5432/nasa_license
+
+ WITH data only, truncate, batch rows = 5000
+ SET work_mem to '64MB', maintenance_work_mem to '256MB'
+
+ INCLUDING ONLY TABLE NAMES LIKE 'CALLBOX_LOG', 'IPCS_LOG', 'lic_access_list', 'nasa_lic', 'nasa_lic_log', 'nasa_security', 'SOFTPHONE_LOG' IN SCHEMA 'dbo'
+
+ ALTER SCHEMA 'dbo' RENAME TO 'public'
+ ;

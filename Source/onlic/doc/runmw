@@ -1,0 +1,1 @@
+./acromw -d -n ip4 -c ../cfg/acromw.cfg

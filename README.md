@@ -1,9 +1,20 @@
 # TrsSocketServer
 
 ## 개요
-CTI(Computer Telephony Integration) 미들웨어 소켓 서버입니다. C++ MFC 기반 Windows 다이얼로그 앱으로, 상담원·교환기·웹·시스템 클라이언트의 TCP/UDP 접속을 받아 호분배와 전화 제어 명령을 중계하고, ODBC로 DB와 연동하며 사용자 라이선스를 관리합니다.
+콜센터 사이트 **감시·알람 중계 서버**입니다. C++ MFC 기반 Windows 다이얼로그 앱으로,
+- TCP 6321에서 IPCS 클라이언트의 라이선스(실행 허가)를 확인해 `Run`/`Close`를 응답하고,
+- UDP 5363으로 사이트 감시 에이전트의 장애/복구 이벤트를 받아 알람 뷰어(TCP 6770)·웹푸시·알림톡·이메일로 전달하며,
+- 5초마다 링크 데이터가 21분 이상 끊긴 사이트를 감지합니다.
 
-이 저장소는 기존 소스의 **분석 · 문서화 · 유지보수**를 위한 프로젝트입니다.
+이 저장소의 목적은 **기존 클라이언트를 변경하지 않고 Linux로 포팅**하는 것입니다. 현재 소스 분석과 기능 기준선 작성이 완료된 상태입니다.
+
+| 문서 | 내용 |
+|---|---|
+| `docs/기능목록.md` | 기능 기준선(F-xx), 죽은 코드(X-xx), 결함(B/S-xx), 검증 체크리스트 |
+| `docs/프로토콜명세.md` | 포트별 바이트 레벨 프레임·응답 규칙 (클라이언트 호환 계약) |
+| `docs/포팅영향분석.md` | Windows 의존성 매트릭스와 Linux 대체안, 결정 필요 사항 |
+| `docs/TrsSocketServer_architecture_diagram.html` | 아키텍처 다이어그램 (브라우저) |
+| `docs/*_심층분석_*.html/.md` | deep-analyze-c 자동 분석 리포트 |
 
 ## 빌드
 Visual Studio 2019 (v142 툴셋, MFC 포함) 필요.
@@ -16,11 +27,13 @@ msbuild Source\TrsSocketServer_Lic_VS2019_Atalk\TrsSocketServer.sln /p:Configura
 빌드 산출물 `TrsSocketServer.exe`를 `TRSSocket.ini`와 같은 폴더에서 실행합니다.
 
 ## 설정 (`TRSSocket.ini`)
-| 섹션 | 키 | 설명 |
+| 섹션 | 키 | 실제 사용 |
 |---|---|---|
-| `[LINK_SERVER]` | `SERVER_IP`, `SERVER_PORT` | 연동 서버 주소 |
-| `[BLOCK_IP]` | `IP=0/1` | 차단 IP 목록 |
-| `[USER_LIC]` | `S01=N` | 사용자 라이선스 수 |
+| `[LINK_SERVER]` | `SERVER_PORT` | 도달 불가 분기에서만 읽음 (`SERVER_IP`는 미사용) |
+| `[BLOCK_IP]` | `IP=0/1` | **미사용** (코드 참조 0건) |
+| `[USER_LIC]` | `S01=N` | **미사용** (라이선스 판정은 DB `lic_access_list`) |
+
+포트(6321/5363/6770), DB DSN/계정, 외부 URL, 알림톡 키는 소스에 하드코딩되어 있습니다.
 
 ## 폴더 구조
 ```

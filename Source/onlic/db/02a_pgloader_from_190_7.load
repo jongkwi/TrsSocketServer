@@ -1,0 +1,19 @@
+-- 02a_pgloader_from_190_7.load : 190.7 NASA_License → nasa_license (알람 테이블 + IPCS_LOG 는 staging)
+-- 실행: pgloader 02a_pgloader_from_190_7.load      (Rocky 9: dnf install pgloader 또는 docker)
+-- 비밀번호는 환경변수 또는 ~/.pgpass / 직접 기입 (이 파일은 git 커밋 금지)
+LOAD DATABASE
+     FROM mssql://lic:PASSWORD@203.239.190.7:1433/NASA_License
+     INTO postgresql://onlic:PASSWORD@127.0.0.1:5432/nasa_license
+
+ WITH data only, truncate, batch rows = 5000
+ SET work_mem to '64MB', maintenance_work_mem to '256MB'
+
+ INCLUDING ONLY TABLE NAMES LIKE 'CallCenter_Link', 'CallCenter_Link_Reference', 'enterprise', 'on_alarm_user', 'project', 'server', 'SITE_AUTH', 'SITE_EMAIL_USER', 'SITE_SMS_BASIC_USER', 'SITE_SMS_USER', 'SITE_SmsExcludeTime', 'stc_calllist', 'IPCS_LOG' IN SCHEMA 'dbo'
+ EXCLUDING TABLE NAMES LIKE 'sysdiagrams' IN SCHEMA 'dbo'
+
+ ALTER SCHEMA 'dbo' RENAME TO 'public'
+ ALTER TABLE NAMES MATCHING 'IPCS_LOG' RENAME TO 'ipcs_log_from_lic2'
+
+ BEFORE LOAD DO
+   $$ CREATE TABLE IF NOT EXISTS ipcs_log_from_lic2 (LIKE ipcs_log INCLUDING DEFAULTS); $$
+ ;

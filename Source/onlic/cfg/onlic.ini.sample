@@ -1,0 +1,61 @@
+; onlic.ini.sample - copy to onlic.ini and fill in. onlic.ini is NOT committed (DB credentials).
+; Encoding: CP949 (alarm texts in [ALARM_MSG] are CP949 bytes). Read with GetPrivateProfileStringUsr.
+
+[IP_CONF]
+MY_IP=                       ; empty = INADDR_ANY (same as Windows build)
+LIC_PORT=6321                ; fixed by client compatibility
+ALARM_PORT=6770
+EVENT_UDP_PORT=5363
+
+[ROLE]
+LICENSE=1                    ; 6321 license check (both servers 1)
+ALARM=1                      ; 5363 receive, 6770 push, atalk/mail/webpush (lic2 server only)
+LINK_CHECK=1                 ; 21-min link watchdog timer (lic2 server only)
+
+[PATH_CONF]
+LOG_PATH=../log
+LOG_AGO_DAY=30
+PID_FILE=../bin/onlic.pid
+
+[DATABASE_INFO]
+LIC_DSN=ipcs_log
+LIC_ID=
+LIC_PW=
+ATALK_DSN=onpia_check
+ATALK_ID=
+ATALK_PW=
+SMS_DSN=onpia_sms
+SMS_ID=
+SMS_PW=
+STATEMENT_TIMEOUT=10
+CLIENT_ENCODING=EUCKR
+
+[LINK_CHECK]
+CHECK_PERIOD_SEC=5
+ERROR_AFTER_MIN=21
+NEW_SITE_SKIP_HOUR=3
+NAS_FAIL_NOTIFY_MAX=10
+NAS_FAIL_COUNT_MAX=999
+
+[ATALK]
+USE=1
+SENDER_KEY=
+CALLBACK=15889310
+SUBJECT=OnpiaATalk
+TRAN_TYPE=5
+
+[SMS]
+USE=0                        ; 1 = same path as non-_ATALK build (SDK_SMS_SEND for alarms)
+USER_ID=onpia
+CALLBACK=15889310
+
+[HTTP]
+WEBPUSH_URL=http://onpia2.cafe24.com/onpia_push_system/send_push.php
+MAIL_URL=http://www.onpia.co.kr/onpiaMailInput.do
+TIMEOUT_SEC=5
+
+[PROTOCOL]
+RECV_CHUNK=500               ; compatibility constants, do not change
+RESIDUAL_MAX=1000
+ALARM_MSG_MAX=80
+LIC_IDLE_TIMEOUT_SEC=30      ; new: close idle 6321 sessions (0 = never, Windows behavior)

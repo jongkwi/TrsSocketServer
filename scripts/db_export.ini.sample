@@ -1,0 +1,39 @@
+; db_export.ini.sample - 절체용 MSSQL → PostgreSQL 데이터 추출 설정. db_export.ini 로 복사해 비밀번호를 채운다 (db_export.ini 는 git 제외)
+[tools]
+; 경로 구분자는 / 사용 (\ 는 escape 로 오해될 수 있음). Windows: SQL Server 클라이언트 도구 경로. Linux(mssql-tools): /opt/mssql-tools/bin/sqlcmd, bcp
+sqlcmd = C:/Program Files/Microsoft SQL Server/100/Tools/Binn/sqlcmd.exe
+bcp    = C:/Program Files/Microsoft SQL Server/100/Tools/Binn/bcp.exe
+
+[output]
+; 출력 루트 (ini 위치 기준). 실행마다 YYYYMMDD_HHMMSS 하위 폴더 생성 -> scripts/YYYYMMDD_HHMMSS/
+dir = .
+; 스키마 파일(00/01) 위치 - 추출 폴더에 복사됨. apply.sh 의 기본 접속 계정/DB
+schema_dir = ../Source/onlic/db
+pg_user = onlic
+pg_db = nasa_license
+; 알람 테이블 소스 이름 (apply.sh A 모드에서 생략할 파일 판별)
+alarm_sources = 7
+
+; 190.44 라이선스 DB (lic2 = sysadmin, 읽기만 수행)
+[source_44]
+server   = 203.239.190.44,34333
+db       = Nasa_License
+user     = lic2
+password = CHANGE_ME
+codepage = cp949
+tables   = lic_access_list, nasa_lic, nasa_lic_log, nasa_security, CALLBOX_LOG, SOFTPHONE_LOG, IPCS_LOG
+; 큰 테이블은 별도 파일로
+split_tables = IPCS_LOG
+file_prefix  = 10
+
+; 190.7 알람 DB (lic = db_owner)
+[source_7]
+server   = 203.239.190.7
+db       = NASA_License
+user     = lic
+password = CHANGE_ME
+codepage = cp949
+tables   = CallCenter_Link, CallCenter_Link_Reference, enterprise, on_alarm_user, project, server, SITE_AUTH, SITE_EMAIL_USER, SITE_SMS_BASIC_USER, SITE_SMS_USER, SITE_SmsExcludeTime, stc_calllist, IPCS_LOG
+; 7 의 IPCS_LOG 는 44 본체에 병합되므로 identity 를 버리고 새로 부여
+drop_identity_tables = IPCS_LOG
+file_prefix  = 12

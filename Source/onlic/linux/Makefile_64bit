@@ -1,0 +1,36 @@
+# Makefile_64bit
+# onlic (TrsSocketServer Linux port) 64bit build - same layout as onmw_3.10.79/linux/Makefile_64bit_curl
+#   - no -D_UTF8 (CP949 kept), app name onlic, app headers in ../include/onlic
+#   - libcurl is required (web push / mail), so -D_CURL and -lcurl are always on
+# usage: make -f Makefile_64bit          (libs + app)
+#        make -f Makefile_64bit onlic    (app only, libs already built)
+
+all:
+	rm -f *.o
+	rm -f ../lib/*.a
+
+	g++ -D_UNIX -D_LINUX -D_DB_TYPE_POSTGRES -D_64BIT -D_CURL -I/usr/include -I/usr/local/include -I/usr/local/odbc/include -I/usr/include -I../include -I../include/ListObject -L/usr/lib -L/usr/local/lib -L/usr/local/odbc/lib -L../lib -O2 -static -fpic -g -c ../source/ListObject/*.cpp
+	ar rcs ../lib/liblist_object.a ListObject.o Objplex.o
+
+	g++ -D_UNIX -D_LINUX -D_DB_TYPE_POSTGRES -D_64BIT -D_CURL -I/usr/include -I/usr/local/include -I/usr/local/odbc/include -I/usr/include -I../include -I../include/LogObject -L/usr/lib -L/usr/local/lib -L/usr/local/odbc/lib -L../lib -O2 -static -fpic -g -c ../source/LogObject/*.cpp
+	ar rcs ../lib/liblog_object.a LogObject.o
+
+	g++ -D_UNIX -D_LINUX -D_DB_TYPE_POSTGRES -D_64BIT -D_CURL -I/usr/include -I/usr/local/include -I/usr/local/odbc/include -I/usr/include -I../include -I../include/UrlEnDe -L/usr/lib -L/usr/local/lib -L/usr/local/odbc/lib -L../lib -O2 -static -fpic -g -c ../source/UrlEnDe/*.cpp
+	ar rcs ../lib/liburl_en_de.a url_en_de.o
+
+	g++ -D_UNIX -D_LINUX -D_DB_TYPE_POSTGRES -D_64BIT -D_CURL -I/usr/include -I/usr/local/include -I/usr/local/odbc/include -I/usr/include -I../include -I../include/ShareLib -L/usr/lib -L/usr/local/lib -L/usr/local/odbc/lib -L../lib -O2 -static -fpic -g -c ../source/ShareLib/*.cpp
+	ar rcs ../lib/libshare_lib.a copyfile.o daemon_init.o Error.o Fourier.o GetPrivateProfile.o Heap_Dump.o md5.o nprintf.o ReadNicMac.o ReceiveN.o strcasecmp.o strfnc_st.o UserTime.o utf8.o UtfIConv.o UtilReboot.o WinMalloc.o wrappthread.o wrapsock.o wrapunix.o WriteN.o
+
+	g++ -D_UNIX -D_LINUX -D_DB_TYPE_POSTGRES -D_64BIT -D_CURL -I/usr/include -I/usr/local/include -I/usr/local/odbc/include -I/usr/include -I../include -I../include/TimerObject -L/usr/lib -L/usr/local/lib -L/usr/local/odbc/lib -L../lib -O2 -static -fpic -g -c ../source/TimerObject/*.cpp
+	ar rcs ../lib/libtimerobject.a TimerObject.o
+
+	g++ -D_UNIX -D_LINUX -D_SOCK_SELECT -D_DB_TYPE_POSTGRES -D_64BIT -D_CURL -I/usr/include -I/usr/local/include -I/usr/local/odbc/include -I/usr/include -I../include -I../include/onlic -L/usr/lib -L/usr/local/lib -L/usr/local/odbc/lib -L../lib -g -O2 -fpic -o ../bin/onlic ../source/onlic/*.cpp -llist_object -llog_object -lshare_lib -ltimerobject -lurl_en_de -lodbc -lcurl -lrt -lpthread
+
+onlic:
+	g++ -D_UNIX -D_LINUX -D_SOCK_SELECT -D_DB_TYPE_POSTGRES -D_64BIT -D_CURL -I/usr/include -I/usr/local/include -I/usr/local/odbc/include -I/usr/include -I../include -I../include/onlic -L/usr/lib -L/usr/local/lib -L/usr/local/odbc/lib -L../lib -g -O2 -fpic -o ../bin/onlic ../source/onlic/*.cpp -llist_object -llog_object -lshare_lib -ltimerobject -lurl_en_de -lodbc -lcurl -lrt -lpthread
+
+clean:
+	rm -f *.o ../lib/*.a ../bin/onlic
+
+distclean:
+	rm -f *.o ../lib/*.a ../bin/onlic config.cache config.log config.status config.h Make.defines

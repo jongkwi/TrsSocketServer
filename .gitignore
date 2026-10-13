@@ -31,6 +31,9 @@ logs/
 _backup/
 _test/
 
+# 운영 서버 자료 (netstat, DB 조회 덤프 — 개인정보/접속정보 포함)
+server/
+
 # 로컬 설정 / 비밀
 .env
 config.local.yaml
@@ -42,3 +45,21 @@ config.local.yaml
 *.swp
 Thumbs.db
 desktop.ini
+
+# onlic (Linux port) build outputs and runtime config
+Source/onlic/lib/*.a
+Source/onlic/bin/onlic
+Source/onlic/bin/*.pid
+Source/onlic/linux/*.o
+Source/onlic/log/*
+!Source/onlic/log/.gitkeep
+Source/onlic/cfg/*.ini
+
+# DB data export (phone numbers, site db passwords)
+Source/onlic/db/data/
+
+# DB export credentials
+scripts/db_export.ini
+
+# DB export outputs (timestamp folders under scripts/)
+scripts/[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]_[0-9][0-9][0-9][0-9][0-9][0-9]/

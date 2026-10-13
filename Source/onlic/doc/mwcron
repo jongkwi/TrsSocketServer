@@ -1,0 +1,22 @@
+. /.profile
+case "$1" in
+'start')
+        if /bin/ps -aux | /usr/bin/grep "acromw" | /usr/bin/grep -v grep > /dev/null 2>&1; then
+                echo "already run!"
+        else
+                echo "cron run!"
+                cd /data/acromate_home/acromw/bin
+                ./acromw -d -n ip4 -c /data/acromate_home/acromw/cfg/acromw.cfg
+        fi
+        ;;
+'stop')
+        if /bin/ps -aux | /usr/bin/grep "acromw" | /usr/bin/grep -v grep > /dev/null 2>&1; then
+                /usr/bin/pkill -9 acromw
+        fi
+        ;;
+*)
+        echo "Usage: $0 { start | stop }"
+        exit 0
+        ;;
+esac
+exit 0
