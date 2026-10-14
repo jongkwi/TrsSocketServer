@@ -1,15 +1,23 @@
 /*
-**	SocketThread.cpp : 리슨·select·세션 (onmw 패턴). 수신 바이트는 Framing_OnReceive 로 재조립 후 워커 큐로
+**	SocketThread.cpp : 리슨·poll·세션 (onmw 패턴). 수신 바이트는 Framing_OnReceive 로 재조립 후 워커 큐로
 **	onmw 와 다른 점: 세션별 잔여 버퍼(ONLIC_SOCKET::rdata), 6321 유휴 타임아웃, 포인터 0xcdcdcdcd 검사 제거
+**	2026-10-14 최종 검증 반영
+**	  - select → poll : glibc fd_set 은 1024 고정(FD_SETSIZE 재정의 무효) → fd 1024 이상에서 메모리 손상·EINVAL 루프
+**	  - 6321 응답은 워커가 fd 사본으로 직접 send 하지 않고 Lic_SendResponse(sock_seq 일치 확인) 로 (fd 재사용 경쟁 차단)
+**	  - 모든 send 는 MSG_DONTWAIT (뮤텍스 보유 중 블로킹 금지, Windows CAsyncSocket 과 동일하게 즉시 실패)
+**	  - 응답 대기 중(pending>0) 세션은 유휴 정리 제외, accept EMFILE 시 100ms 대기, recv EINTR/EAGAIN 은 유지
 */
 #include "onlicDefine.h"
 #include "SocketThread.h"
 #include "RecvWaitStack.h"
 #include <errno.h>
+#include <poll.h>
 
 pthread_mutex_t	lic_socklist_mutex;
 pthread_mutex_t	alarm_socklist_mutex;
 static int		s_sock_seq = 0;
+
+#define SEND_FLAGS		(MSG_NOSIGNAL | MSG_DONTWAIT)
 
 /* ---------------- 생성/종료 ---------------- */
 int Tcp_CreateServerSocket(ONLIC_SOCKET &sock, const char *szIP, unsigned int nPort, int nPortType)
@@ -81,6 +89,10 @@ int Udp_CreateServerSocket(ONLIC_SOCKET &sock, const char *szIP, unsigned int nP
 	return TRUE;
 }
 
+/*
+**	accept. 반환 NULL 이면 접속 없음/실패.
+**	EMFILE/ENFILE : fd 고갈. 리슨 소켓이 계속 readable 이라 즉시 재시도하면 CPU 100% → 100ms 대기
+*/
 ONLIC_SOCKET* Tcp_Accept(ONLIC_SOCKET *pListen, int nPortType)
 {
 	ONLIC_SOCKET *pCli = NULL;
@@ -93,7 +105,9 @@ again:
 	n = accept(pListen->handle, (struct sockaddr*)&sa, &salen);
 	if(n < 0){
 		if(errno == ECONNABORTED || errno == EINTR) goto again;
+		if(errno == EAGAIN || errno == EWOULDBLOCK) return NULL;
 		OnlicLogf(LOG_SOFT, "accept error errno:%d port_type:%d", errno, nPortType);
+		if(errno == EMFILE || errno == ENFILE) WaitMSleep(100);
 		return NULL;
 	}
 	pCli = new ONLIC_SOCKET;
@@ -106,9 +120,10 @@ again:
 	strcpy_st(pCli->remote_ip, inet_ntoa(sa.sin_addr));
 	pCli->remote_port = ntohs(sa.sin_port);
 	pCli->local_port = pListen->local_port;
-	pCli->sock_seq = ++s_sock_seq;
+	pCli->sock_seq = __sync_add_and_fetch(&s_sock_seq, 1);		/* LIC/ALARM 두 스레드에서 호출 → 원자 증가 */
 	pCli->sock_time = GetMilliSencondProc();
 	pCli->last_recv_time = pCli->sock_time;
+	pCli->pending = 0;
 	pCli->rdata[0] = 0;
 	pCli->rlen = 0;
 	return pCli;
@@ -129,53 +144,7 @@ void Tcp_TerminateSocket(ONLIC_SOCKET *pSock)
 	pSock->handle = 0;
 }
 
-/* ---------------- fd_set / 리스트 ---------------- */
-void FdListSet(CListObject *pList, fd_set *rset)
-{
-	ONLIC_SOCKET *s = NULL;
-	LISTPOS pos = pList->GetHeadPosition();
-	int i = 0, cnt = pList->GetCount();
-	for(i = 0; i < cnt && pos != NULL; i++){
-		s = (ONLIC_SOCKET*)pList->GetAt(pos);
-		if(s != NULL && s->handle > 0) FD_SET(s->handle, rset);
-		pList->GetNext(pos);
-	}
-}
-
-int GetSocketMaxFd(CListObject *pList, int nListenHandle)
-{
-	ONLIC_SOCKET *s = NULL;
-	LISTPOS pos = pList->GetHeadPosition();
-	int i = 0, cnt = pList->GetCount(), nMax = nListenHandle;
-	for(i = 0; i < cnt && pos != NULL; i++){
-		s = (ONLIC_SOCKET*)pList->GetAt(pos);
-		if(s != NULL && s->handle > nMax) nMax = s->handle;
-		pList->GetNext(pos);
-	}
-	return nMax;
-}
-
-int ReloadFdSetSocket(CListObject *pList, fd_set *rset, int nListenHandle)
-{
-	FD_ZERO(rset);
-	FD_SET(nListenHandle, rset);
-	FdListSet(pList, rset);
-	return GetSocketMaxFd(pList, nListenHandle);
-}
-
-ONLIC_SOCKET* IsClientSocket(CListObject *pList, fd_set *rset)
-{
-	ONLIC_SOCKET *s = NULL;
-	LISTPOS pos = pList->GetHeadPosition();
-	int i = 0, cnt = pList->GetCount();
-	for(i = 0; i < cnt && pos != NULL; i++){
-		s = (ONLIC_SOCKET*)pList->GetAt(pos);
-		if(s != NULL && s->handle > 0 && FD_ISSET(s->handle, rset)) return s;
-		pList->GetNext(pos);
-	}
-	return NULL;
-}
-
+/* ---------------- 리스트 ---------------- */
 int ClientSocketRemove(CListObject *pList, ONLIC_SOCKET *pSock)
 {
 	ONLIC_SOCKET *s = NULL;
@@ -207,6 +176,69 @@ void RemoveAllSocket(CListObject *pList)
 	pList->RemoveAll();
 }
 
+/*
+**	poll 배열 구성 (호출측이 리스트 뮤텍스 보유). [0] = 리슨, [1..] = 세션. 반환 = 항목 수
+**	배열은 호출측이 보관하며 부족하면 재할당 (세션 수 변동 대응)
+*/
+static int BuildPollFds(CListObject *pList, ONLIC_SOCKET *pListen, struct pollfd **ppFds, ONLIC_SOCKET ***ppSocks, int *pCap)
+{
+	ONLIC_SOCKET *s = NULL;
+	LISTPOS pos = NULL;
+	int i = 0, n = 0, cnt = pList->GetCount();
+
+	if(cnt + 1 > *pCap){
+		int nCap = cnt + 64;
+		struct pollfd *f = new struct pollfd[nCap];
+		ONLIC_SOCKET **p = new ONLIC_SOCKET*[nCap];
+		if(*ppFds != NULL) delete[] *ppFds;
+		if(*ppSocks != NULL) delete[] *ppSocks;
+		*ppFds = f; *ppSocks = p; *pCap = nCap;
+	}
+	(*ppFds)[0].fd = pListen->handle; (*ppFds)[0].events = POLLIN; (*ppFds)[0].revents = 0;
+	(*ppSocks)[0] = pListen;
+	n = 1;
+	pos = pList->GetHeadPosition();
+	for(i = 0; i < cnt && pos != NULL; i++){
+		s = (ONLIC_SOCKET*)pList->GetAt(pos);
+		if(s != NULL && s->handle > 0){
+			(*ppFds)[n].fd = s->handle; (*ppFds)[n].events = POLLIN; (*ppFds)[n].revents = 0;
+			(*ppSocks)[n] = s;
+			n++;
+		}
+		pList->GetNext(pos);
+	}
+	return n;
+}
+
+/* ---------------- 6321 응답 (워커 → 세션). fd 재사용 경쟁 차단 ---------------- */
+/*
+**	워커가 큐에서 꺼낸 항목의 (handle, sock_seq) 와 현재 리스트의 세션이 일치할 때만 send.
+**	세션이 이미 닫혔으면 같은 fd 번호가 새 접속·ODBC·로그파일에 재사용됐을 수 있으므로 절대 쓰지 않는다.
+**	반환: send 결과(>0 성공), -2 = 세션 없음(이미 종료), -1 = send 실패
+*/
+int Lic_SendResponse(int nSockSeq, int nHandle, const char *szData, int nLen)
+{
+	ONLIC_SOCKET *s = NULL;
+	LISTPOS pos = NULL;
+	int i = 0, cnt = 0, ret = -2;
+
+	Pthread_mutex_lock(&lic_socklist_mutex);
+	cnt = list_lic_socket.GetCount();
+	pos = list_lic_socket.GetHeadPosition();
+	for(i = 0; i < cnt && pos != NULL; i++){
+		s = (ONLIC_SOCKET*)list_lic_socket.GetAt(pos);
+		if(s != NULL && s->handle == nHandle && s->sock_seq == nSockSeq){
+			ret = (int)send(s->handle, szData, nLen, SEND_FLAGS);		/* 3~5 바이트, 논블로킹 */
+			if(ret < 0) ret = -1;
+			if(s->pending > 0) s->pending--;
+			break;
+		}
+		list_lic_socket.GetNext(pos);
+	}
+	Pthread_mutex_unlock(&lic_socklist_mutex);
+	return ret;
+}
+
 /* ---------------- 6770 전체 푸시 (AlarmUser_Send:1774-1822) ---------------- */
 int AlarmUser_Send(const char *szMessage, int nCmd)
 {
@@ -226,7 +258,8 @@ int AlarmUser_Send(const char *szMessage, int nCmd)
 	for(i = 0; i < cnt && pos != NULL; i++){
 		s = (ONLIC_SOCKET*)list_alarm_socket.GetAt(pos);
 		if(s != NULL && s->handle > 0){
-			ret = (int)send(s->handle, Sdata, nLen, MSG_NOSIGNAL);
+			/* 논블로킹: 송신버퍼가 찬 뷰어(절전 PC 등)는 EAGAIN 으로 즉시 실패 처리. 세션은 유지 (원본 동일) */
+			ret = (int)send(s->handle, Sdata, nLen, SEND_FLAGS);
 			OnlicLogf(LOG_ALARM, "Send(%d) [%s:%u] %s", ret, s->remote_ip, s->remote_port, Sdata);
 			if(ret > 0) nUserCount++;
 		}
@@ -240,7 +273,7 @@ int AlarmUser_Send(const char *szMessage, int nCmd)
 
 /* ---------------- TCP 프레임 콜백 ---------------- */
 /*
-**	6321: 워커 큐로 (DB 조회가 있으므로 소켓 스레드에서 처리하지 않음)
+**	6321: 워커 큐로 (DB 조회가 있으므로 소켓 스레드에서 처리하지 않음). pending++ 로 응답 대기 표시
 **	6770: Windows ServerProc ALARM_PORT 분기 - 첫 글자 '3' 이면 즉시 ACK (DB 없음 → 인라인)
 */
 static void OnTcpFrame(void *pCtx, int nCmd, const char *szPayload, int nLen)
@@ -255,6 +288,7 @@ static void OnTcpFrame(void *pCtx, int nCmd, const char *szPayload, int nLen)
 		memset_st(&item, 0, sizeof(item));
 		item.sock = pSock;
 		item.handle = pSock->handle;
+		item.sock_seq = pSock->sock_seq;
 		item.port_type = PORT_TYPE_LIC;
 		item.remote_sa = pSock->remote_sa;
 		strcpy_st(item.remote_ip, pSock->remote_ip);
@@ -264,6 +298,9 @@ static void OnTcpFrame(void *pCtx, int nCmd, const char *szPayload, int nLen)
 		item.cmd = nCmd;
 		item.len = (nLen > MAX_RECV_BUFF) ? MAX_RECV_BUFF : nLen;
 		memcpy(item.buff, szPayload, item.len); item.buff[item.len] = 0;
+		Pthread_mutex_lock(&lic_socklist_mutex);
+		pSock->pending++;
+		Pthread_mutex_unlock(&lic_socklist_mutex);
 		if(__lic_recv != NULL) __lic_recv->Push(item);
 		return;
 	}
@@ -273,53 +310,48 @@ static void OnTcpFrame(void *pCtx, int nCmd, const char *szPayload, int nLen)
 		if(atoi(command) == 3){
 			GetLocalTimeProc(szTime);
 			Framing_BuildAlarmPush(Sdata, sizeof(Sdata), ALARM_CMD_HEARTBEAT_ACK, "", szTime);
-			send(pSock->handle, Sdata, strlen_st(Sdata), MSG_NOSIGNAL);
+			send(pSock->handle, Sdata, strlen_st(Sdata), SEND_FLAGS);
 		}
 		return;
 	}
 }
 
-/* ---------------- TCP 공통 루프 ---------------- */
+/* ---------------- TCP 공통 루프 (poll) ---------------- */
 static void RunTcpSocketLoop(ONLIC_SOCKET *pListen, CListObject *pList, pthread_mutex_t *pMutex, int nPortType, const char *szName)
 {
-	struct timeval tval;
-	fd_set rset_all, rset1;
+	struct pollfd *fds = NULL;
+	ONLIC_SOCKET **socks = NULL;
 	ONLIC_SOCKET *pCli = NULL, *pNew = NULL, *pChk = NULL;
 	LISTPOS pos = NULL, oldPos = NULL;
 	char buf[MAXLENGTH+1];
-	int maxfd = 0, nready = 0, nRecLen = 0, i = 0, cnt = 0, nClose = 0;
+	int nCap = 0, nFds = 0, nready = 0, nRecLen = 0, i = 0, cnt = 0, nClose = 0;
 	int64_t now = 0;
 	int nIdleMs = (nPortType == PORT_TYPE_LIC) ? sys_conf.lic_idle_timeout_sec * 1000 : 0;
 
-	FD_ZERO(&rset_all);
-	FD_SET(pListen->handle, &rset_all);
-	maxfd = pListen->handle;
-	OnlicLogf(LOG_SOFT, "%s socket thread start handle:%d port:%u idle:%dms", szName, pListen->handle, pListen->local_port, nIdleMs);
+	OnlicLogf(LOG_SOFT, "%s socket thread start handle:%d port:%u idle:%dms (poll)", szName, pListen->handle, pListen->local_port, nIdleMs);
 
 	for( ; ; ){
 		if(onlic_start == FALSE) break;
-		memcpy(&rset1, &rset_all, sizeof(fd_set));
-		tval.tv_sec = 1; tval.tv_usec = 0;
-		nready = select(maxfd + 1, &rset1, NULL, NULL, &tval);
+
+		Pthread_mutex_lock(pMutex);
+		nFds = BuildPollFds(pList, pListen, &fds, &socks, &nCap);
+		Pthread_mutex_unlock(pMutex);
+
+		nready = poll(fds, nFds, 1000);
 		if(nready < 0){
 			if(errno == EINTR) continue;
-			Pthread_mutex_lock(pMutex);
-			maxfd = ReloadFdSetSocket(pList, &rset_all, pListen->handle);
-			Pthread_mutex_unlock(pMutex);
-			OnlicLogf(LOG_SOFT, "%s select error errno:%d cnt:%d", szName, errno, pList->GetCount());
+			OnlicLogf(LOG_SOFT, "%s poll error errno:%d cnt:%d", szName, errno, nFds - 1);
 			WaitMSleep(50);
 			continue;
 		}
 		if(onlic_start == FALSE) break;
 
 		/* 접속 (Windows ProcessPendingAccept) */
-		if(nready > 0 && FD_ISSET(pListen->handle, &rset1)){
+		if(nready > 0 && (fds[0].revents & (POLLIN | POLLERR | POLLHUP | POLLNVAL))){
 			pNew = Tcp_Accept(pListen, nPortType);
 			if(pNew != NULL){
 				Pthread_mutex_lock(pMutex);
 				pList->AddTail(pNew);
-				FD_SET(pNew->handle, &rset_all);
-				maxfd = GetSocketMaxFd(pList, pListen->handle);
 				cnt = pList->GetCount();
 				Pthread_mutex_unlock(pMutex);
 				OnlicLogf(LOG_TCP, "Socket Connect %s IP:%s,Port:%u handle:%d cnt:%d", szName, pNew->remote_ip, pNew->remote_port, pNew->handle, cnt);
@@ -327,22 +359,29 @@ static void RunTcpSocketLoop(ONLIC_SOCKET *pListen, CListObject *pList, pthread_
 			nready--;
 		}
 
-		/* 수신 */
-		while(nready > 0){
-			Pthread_mutex_lock(pMutex);
-			pCli = IsClientSocket(pList, &rset1);
-			Pthread_mutex_unlock(pMutex);
-			if(pCli == NULL) break;
-			FD_CLR(pCli->handle, &rset1);
+		/* 수신. 세션 제거는 이 스레드만 수행하므로 socks[] 포인터는 루프 동안 유효 */
+		for(i = 1; i < nFds && nready > 0; i++){
+			if(fds[i].revents == 0) continue;
 			nready--;
+			pCli = socks[i];
+			if(pCli == NULL || pCli->handle != fds[i].fd) continue;
+
+			if(fds[i].revents & (POLLERR | POLLHUP | POLLNVAL)){
+				/* 상대 종료/오류. recv 로 잔여를 읽지 않고 바로 정리 (원본 OnClose 와 동일) */
+				OnlicLogf(LOG_TCP, "Socket Close %s IP:%s,Port:%u handle:%d revents:0x%x", szName, pCli->remote_ip, pCli->remote_port, pCli->handle, fds[i].revents);
+				Pthread_mutex_lock(pMutex);
+				ClientSocketRemove(pList, pCli);
+				Pthread_mutex_unlock(pMutex);
+				continue;
+			}
 
 			memset_st(buf, 0, sizeof(buf));
 			nRecLen = (int)recv(pCli->handle, buf, MAXLENGTH, 0);		/* Windows Receive(500), 이후 strlen 기준 */
+			if(nRecLen < 0 && (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK)) continue;
 			if(nRecLen <= 0){
-				OnlicLogf(LOG_TCP, "Socket Close %s IP:%s,Port:%u handle:%d ret:%d", szName, pCli->remote_ip, pCli->remote_port, pCli->handle, nRecLen);
+				OnlicLogf(LOG_TCP, "Socket Close %s IP:%s,Port:%u handle:%d ret:%d errno:%d", szName, pCli->remote_ip, pCli->remote_port, pCli->handle, nRecLen, (nRecLen < 0) ? errno : 0);
 				Pthread_mutex_lock(pMutex);
 				ClientSocketRemove(pList, pCli);
-				maxfd = ReloadFdSetSocket(pList, &rset_all, pListen->handle);
 				Pthread_mutex_unlock(pMutex);
 				continue;
 			}
@@ -350,7 +389,7 @@ static void RunTcpSocketLoop(ONLIC_SOCKET *pListen, CListObject *pList, pthread_
 			Framing_OnReceive(pCli->rdata, buf, OnTcpFrame, pCli);
 		}
 
-		/* 유휴 세션 정리 (신규, 결정 B6). 0 이면 Windows 와 같이 세션 유지 */
+		/* 유휴 세션 정리 (신규, 결정 B6). 0 이면 Windows 와 같이 세션 유지. 응답 대기 중(pending>0) 세션은 제외 */
 		if(nIdleMs > 0){
 			now = GetMilliSencondProc();
 			nClose = 0;
@@ -361,7 +400,7 @@ static void RunTcpSocketLoop(ONLIC_SOCKET *pListen, CListObject *pList, pthread_
 				pChk = (ONLIC_SOCKET*)pList->GetAt(pos);
 				oldPos = pos;
 				pList->GetNext(pos);
-				if(pChk != NULL && (now - pChk->last_recv_time) > nIdleMs){
+				if(pChk != NULL && pChk->pending <= 0 && (now - pChk->last_recv_time) > nIdleMs){
 					OnlicLogf(LOG_TCP, "Socket Idle Close %s IP:%s,Port:%u handle:%d idle:%lldms", szName, pChk->remote_ip, pChk->remote_port, pChk->handle, (long long)(now - pChk->last_recv_time));
 					pList->RemoveAt(oldPos);
 					Tcp_TerminateClientSocket(pChk);
@@ -369,7 +408,6 @@ static void RunTcpSocketLoop(ONLIC_SOCKET *pListen, CListObject *pList, pthread_
 					nClose++;
 				}
 			}
-			if(nClose > 0) maxfd = ReloadFdSetSocket(pList, &rset_all, pListen->handle);
 			Pthread_mutex_unlock(pMutex);
 		}
 	}
@@ -378,6 +416,8 @@ static void RunTcpSocketLoop(ONLIC_SOCKET *pListen, CListObject *pList, pthread_
 	RemoveAllSocket(pList);
 	Pthread_mutex_unlock(pMutex);
 	Tcp_TerminateSocket(pListen);
+	if(fds != NULL) delete[] fds;
+	if(socks != NULL) delete[] socks;
 	OnlicLogf(LOG_SOFT, "%s socket thread exit", szName);
 }
 
@@ -399,28 +439,25 @@ void* RunAlarmSocketThread(void *arg)
 void* RunUdpSocketThread(void *arg)
 {
 	ONLIC_SOCKET *pUdp = (ONLIC_SOCKET*)arg;
-	struct timeval tval;
-	fd_set rset;
+	struct pollfd pfd;
 	struct sockaddr_in from;
 	socklen_t fromlen = 0;
 	char buf[MAXLENGTH+1], payload[RESIDUAL_MAX+1];
 	int nready = 0, nRecLen = 0, nLen = 0;
 	SOCK_RECV_WAIT item;
 
-	OnlicLogf(LOG_SOFT, "UDP socket thread start handle:%d port:%u", pUdp->handle, pUdp->local_port);
+	OnlicLogf(LOG_SOFT, "UDP socket thread start handle:%d port:%u (poll)", pUdp->handle, pUdp->local_port);
 	for( ; ; ){
 		if(onlic_start == FALSE) break;
-		FD_ZERO(&rset);
-		FD_SET(pUdp->handle, &rset);
-		tval.tv_sec = 1; tval.tv_usec = 0;
-		nready = select(pUdp->handle + 1, &rset, NULL, NULL, &tval);
+		pfd.fd = pUdp->handle; pfd.events = POLLIN; pfd.revents = 0;
+		nready = poll(&pfd, 1, 1000);
 		if(nready < 0){
 			if(errno == EINTR) continue;
-			OnlicLogf(LOG_SOFT, "UDP select error errno:%d", errno);
+			OnlicLogf(LOG_SOFT, "UDP poll error errno:%d", errno);
 			WaitMSleep(50);
 			continue;
 		}
-		if(nready <= 0 || !FD_ISSET(pUdp->handle, &rset)) continue;
+		if(nready <= 0 || !(pfd.revents & POLLIN)) continue;
 
 		memset_st(buf, 0, sizeof(buf));
 		memset_st(&from, 0, sizeof(from));
@@ -428,15 +465,14 @@ void* RunUdpSocketThread(void *arg)
 		nRecLen = (int)recvfrom(pUdp->handle, buf, MAXLENGTH, 0, (struct sockaddr*)&from, &fromlen);	/* ReceiveFrom(500): 초과분 절단 */
 		if(nRecLen <= 0) continue;
 
+		/* 원본: STX~ETX 없으면 조용히 폐기. STX ETX 만 있는 빈 프레임(길이 0)은 처리 대상. ETX 가 STX 보다 앞서면 프레임 없음 */
 		nLen = Framing_UdpExtract(buf, payload, sizeof(payload));
-		if(nLen <= 0 && payload[0] == 0){
-			/* 원본: STX/ETX 없으면 조용히 폐기. (STX ETX 만 있는 빈 프레임은 nLen 0 이지만 처리 대상) */
-			if(!(nRecLen >= 2 && strchr(buf, PKT_STX) != NULL && strchr(buf, PKT_ETX) != NULL)) continue;
-		}
+		if(nLen < 0) continue;
 
 		memset_st(&item, 0, sizeof(item));
 		item.sock = NULL;
 		item.handle = pUdp->handle;
+		item.sock_seq = 0;
 		item.port_type = PORT_TYPE_UDP;
 		item.remote_sa = from;
 		strcpy_st(item.remote_ip, inet_ntoa(from.sin_addr));

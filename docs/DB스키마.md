@@ -36,24 +36,24 @@ PostgreSQL(`onpia_check`)은 아직 접속하지 않았으므로 §3은 코드 �
 | 결과 읽기 | `SQLFetch` + 컬럼별 `SQLGetData(SQL_C_CHAR/SQL_C_LONG)` | `DirectODBC.cpp:365`, `DirectODBC.cpp:497-502`, `DirectODBC.cpp:563-566`, `DirectODBC.cpp:622-626`, `DirectODBC.cpp:709-723`, `DirectODBC.cpp:814-818` | 동일. 버퍼 길이가 컬럼 최대 길이보다 짧은 곳은 §2에서 표기 |
 | 재접속 | stmt 할당/실행 실패 시 `ConnectODBC()` 1회 재시도 후 **실패 반환** (재실행 없음). `RowCount`는 실패 시 **-1** | `DirectODBC.cpp:240-252`, `DirectODBC.cpp:347-381` | onmw 방식(lazy reconnect + 재실행)으로 보강 |
 | SQL 조립 | `CString::Format` 문자열 결합, 이스케이프 없음 | 전체 | 바인딩(`SQLBindParameter`) 또는 `'`→`''` 이스케이프로 수정 (결정 사항 B 반영) |
-| 인코딩 | CP949 바이트를 그대로 전송 (`SQL_C_CHAR`). MSSQL 정렬 `Korean_Wansung_CI_AS` = CP949 | - | PG: `set client_encoding to 'EUCKR'`(psqlODBC ANSI 드라이버) |
+| 인코딩 | CP949 바이트를 그대로 전송 (`SQL_C_CHAR`). MSSQL 정렬 `Korean_Wansung_CI_AS` = CP949 | - | PG: `set client_encoding to 'UHC'`. 드라이버는 서버에 이미 있는 PGDG `psqlodbc.so`(43 서버 `/usr/pgsql-15/lib/`) 그대로 — 2026-10-14 수정 전 onlic 빌드로 링크 장애 알림톡 한글 정상 수신 확인, isql 바이트도 CP949. ANSI 교체 불필요. `EUCKR` 은 PG 에서 KS X 1001 완성형만 지원해 CP949 확장 한글이 `22021` 오류 → UHC 로 확정 (2026-10-14) |
 | 스레드 | 핸들 3개 모두 메인(UI) 스레드 전용. `AlarmWebTh_EmailPush`도 메인에서 호출 | - | Linux 설계: 스레드당 핸들(리눅스참조구조 §4) |
 | 링크 | `odbc32.lib`, `odbccp32.lib`(Release만) | `vcxproj:98,137` | `-lodbc` |
 
 ### 1.3 Linux 측 DSN 구성 (제안, 결정: PostgreSQL + unixODBC)
 
 ```ini
-; /etc/odbcinst.ini
+; /etc/odbcinst.ini  (43 서버 실제 구성 2026-10-14 — onmw 와 공용, 변경하지 않음)
 [PostgreSQL]
 Description = psqlODBC
-Driver      = /usr/lib64/psqlodbca.so   ; ANSI 드라이버 (CP949/EUCKR 바이트 그대로)
+Driver      = /usr/pgsql-15/lib/psqlodbc.so   ; 이 드라이버로 onlic 알림톡 한글 정상 확인. ANSI(psqlodbca) 교체 불필요
 
 ; /etc/odbc.ini  (DSN 이름은 기존과 동일하게 유지하면 ini 변경 최소화)
 [ipcs_log]
 Driver     = PostgreSQL
-Servername = <host>
+Servername = 127.0.0.1
 Database   = nasa_license
-Port       = 5432
+Port       = 39999
 
 [onpia_check]
 Driver     = PostgreSQL

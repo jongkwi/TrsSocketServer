@@ -105,12 +105,16 @@ int CHttpWait::Start()
 void CHttpWait::Kill()
 {
 	int i = 0;
+	pthread_t tid = 0;
 	ALARM_OBJ *p = NULL;
 	LISTPOS pos = NULL;
 	if(m_run != TRUE) return;
 	m_bStop = TRUE;
-	for(i = 0; i < 30; i++){ if(m_pid == 0) break; WaitMSleep(100); }
-	if(m_pid != 0){ Pthread_kill(&m_pid, SIGINT); m_pid = 0; }
+	/* curl 타임아웃 = TIMEOUT_SEC*2 (기본 10초) → 15초 안에 끝난다. 끝날 때까지 기다려 join (L5). 안 끝나면 큐를 건드리지 않고 반환 */
+	tid = m_pid;
+	for(i = 0; i < 150; i++){ if(m_pid == 0) break; WaitMSleep(100); }
+	if(m_pid != 0){ OnlicLog(LOG_SOFT, "RunHttpWaitThread did not exit in 15s - queue left for process exit"); m_run = FALSE; return; }
+	if(tid != 0) pthread_join(tid, NULL);
 	Pthread_mutex_lock(&m_mutex);
 	pos = m_list.GetHeadPosition();
 	while(pos != NULL){
@@ -278,8 +282,10 @@ int AlarmWebTh_EmailPush(CDirectODBC *pDB, int nEventType, const char *szIP, con
 {
 	EMAIL_SITE_USERS *pEmailUser = NULL;
 	int nCnt = 0, i = 0, nFind = TRUE;
+	char szSite[101] = "";
 
 	OnlicLogf(LOG_ALARM, "AlarmWebTh_EmailPush1 type:%d, ip:%s, rip:%s, name:%s, proc:%s", nEventType, szIP, szRealIP, szSiteName, szProcName);
+	Framing_HangulStrCut((szSiteName != NULL) ? szSiteName : "", szSite, 100);	/* 제목 버퍼 201 보호: 사이트명(≤256) 은 100 바이트로 절단 (L2) */
 	if(pDB == NULL || __http_wait == NULL) return FALSE;
 	if(strlen_st(szIP) == 0 || strlen_st(szRealIP) == 0) return FALSE;
 
@@ -297,38 +303,38 @@ int AlarmWebTh_EmailPush(CDirectODBC *pDB, int nEventType, const char *szIP, con
 		nFind = TRUE;
 		switch(nEventType){
 		  case SEND_TYPE_NET_ERROR:
-			if(strlen_st(e.email_msg1) <= 0) nprintf(e.email_msg1, 500, "%s-%s에서 링크 데이터가 수신 되고 있지 않습니다. 인터넷 회선 점검 및 서버 점검 필요!", szSiteName, szIP);
-			if(strlen_st(e.email_title) <= 0) nprintf(e.email_title, 200, "%s-%s의 서버 및 인터넷 회선 장애", szSiteName, szIP);
+			if(strlen_st(e.email_msg1) <= 0) nprintf(e.email_msg1, 500, "%s-%s에서 링크 데이터가 수신 되고 있지 않습니다. 인터넷 회선 점검 및 서버 점검 필요!", szSite, szIP);
+			if(strlen_st(e.email_title) <= 0) nprintf(e.email_title, 200, "%s-%s의 서버 및 인터넷 회선 장애", szSite, szIP);
 			break;
 		  case SEND_TYPE_NET_SUCC:
-			if(strlen_st(e.email_msg1) <= 0) nprintf(e.email_msg1, 500, "%s-%s에서 링크 데이터가 수신 되고 있습니다", szSiteName, szIP);
-			if(strlen_st(e.email_title) <= 0) nprintf(e.email_title, 200, "%s-%s의 네트워크 정상 연결", szSiteName, szIP);
+			if(strlen_st(e.email_msg1) <= 0) nprintf(e.email_msg1, 500, "%s-%s에서 링크 데이터가 수신 되고 있습니다", szSite, szIP);
+			if(strlen_st(e.email_title) <= 0) nprintf(e.email_title, 200, "%s-%s의 네트워크 정상 연결", szSite, szIP);
 			break;
 		  case SEND_TYPE_PROC_ERROR:
 			if(strlen_st(e.alarm_proc_name) > 0 && strstr(szProcName, e.alarm_proc_name) == NULL) nFind = FALSE;
 			if(strlen_st(e.email_msg1) <= 0) strncpy_st(e.email_msg1, szContents, 500);
-			if(strlen_st(e.email_title) <= 0) nprintf(e.email_title, 200, "%s-%s의 %s 프로세스 장애 발생", szSiteName, szIP, szProcName);
+			if(strlen_st(e.email_title) <= 0) nprintf(e.email_title, 200, "%s-%s의 %s 프로세스 장애 발생", szSite, szIP, szProcName);
 			break;
 		  case SEND_TYPE_PROC_SUCC:
 			if(strlen_st(e.alarm_proc_name) > 0 && strstr(szProcName, e.alarm_proc_name) == NULL) nFind = FALSE;
 			if(strlen_st(e.email_msg1) <= 0) strncpy_st(e.email_msg1, szContents, 500);
-			if(strlen_st(e.email_title) <= 0) nprintf(e.email_title, 200, "%s-%s의 %s 프로세스 장애 복구", szSiteName, szIP, szProcName);
+			if(strlen_st(e.email_title) <= 0) nprintf(e.email_title, 200, "%s-%s의 %s 프로세스 장애 복구", szSite, szIP, szProcName);
 			break;
 		  case SEND_TYPE_NAS_CON_FAIL:
 			if(strlen_st(e.email_msg1) <= 0) strncpy_st(e.email_msg1, szContents, 500);
-			if(strlen_st(e.email_title) <= 0) nprintf(e.email_title, 200, "%s-%s의 %s NAS 네트워크 장애", szSiteName, szIP, szProcName);
+			if(strlen_st(e.email_title) <= 0) nprintf(e.email_title, 200, "%s-%s의 %s NAS 네트워크 장애", szSite, szIP, szProcName);
 			break;
 		  case SEND_TYPE_NAS_CON_SUCC:
 			if(strlen_st(e.email_msg1) <= 0) strncpy_st(e.email_msg1, szContents, 500);
-			if(strlen_st(e.email_title) <= 0) nprintf(e.email_title, 200, "%s-%s의 %s NAS 네트워크 연결", szSiteName, szIP, szProcName);
+			if(strlen_st(e.email_title) <= 0) nprintf(e.email_title, 200, "%s-%s의 %s NAS 네트워크 연결", szSite, szIP, szProcName);
 			break;
 		  case SEND_TYPE_NAS_UPLOAD_FAIL:
 			if(strlen_st(e.email_msg1) <= 0) strncpy_st(e.email_msg1, szContents, 500);
-			if(strlen_st(e.email_title) <= 0) nprintf(e.email_title, 200, "%s-%s의 %s  NAS 업로드 실패", szSiteName, szIP, szProcName);
+			if(strlen_st(e.email_title) <= 0) nprintf(e.email_title, 200, "%s-%s의 %s  NAS 업로드 실패", szSite, szIP, szProcName);
 			break;
 		  case SEND_TYPE_NAS_UPLOAD_SUCC:
 			if(strlen_st(e.email_msg1) <= 0) strncpy_st(e.email_msg1, szContents, 500);
-			if(strlen_st(e.email_title) <= 0) nprintf(e.email_title, 200, "%s-%s의 %s NAS 업로드 성공", szSiteName, szIP, szProcName);
+			if(strlen_st(e.email_title) <= 0) nprintf(e.email_title, 200, "%s-%s의 %s NAS 업로드 성공", szSite, szIP, szProcName);
 			break;
 		  default:
 			break;

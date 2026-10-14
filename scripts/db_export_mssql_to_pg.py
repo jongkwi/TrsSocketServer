@@ -5,7 +5,7 @@ db_export_mssql_to_pg.py - 절체 당일 운영 MSSQL(190.44 / 190.7) 데이터�
 
   * 원본 DB 에는 SELECT 만 수행 (bcp queryout). 스키마는 실행 시점에 INFORMATION_SCHEMA 에서 읽는다
   * 출력: 실행 파일 폴더(scripts/) 아래 <YYYYMMDD_HHMMSS>/ 에
-        00_create_db.sql, 01_nasa_license_schema.sql (스키마 사본)
+        01_nasa_license_schema.sql (스키마 사본. DB 자체는 만들지 않음 - 서버에서 createdb 로 수동 생성)
         10_data_44.sql, 10_data_44_ipcs_log.sql, 12_data_7.sql, 13_after_insert.sql (데이터)
         apply.sh, apply_commands.txt (적용 스크립트), _report.txt (건수 검증)
   * 재실행 가능: 스키마는 IF NOT EXISTS, 데이터 파일은 TRUNCATE 후 INSERT (append 테이블은 동일 행 건너뜀)
@@ -17,6 +17,7 @@ db_export_mssql_to_pg.py - 절체 당일 운영 MSSQL(190.44 / 190.7) 데이터�
   python db_export_mssql_to_pg.py --source 44     # 44 만
   python db_export_mssql_to_pg.py --tables "lic_access_list,IPCS_LOG"   (bat 에서는 쉼표 목록을 따옴표로)
   python db_export_mssql_to_pg.py --dry-run       # 테이블·행수만 확인, 파일 생성 안 함
+  python db_export_mssql_to_pg.py --regen-apply <추출폴더>   # 추출은 하지 않고 그 폴더의 apply.sh/01 스키마만 다시 생성
 """
 from __future__ import annotations
 import argparse, configparser, io, logging, os, re, shutil, subprocess, sys, time
@@ -195,8 +196,13 @@ def convert(src: dict, table: str, cols: list[dict], path: str, skip_ident: bool
     if batch:
         f.write(hdr + ",\n".join(batch) + ";\n")
     if skip_ident:
-        cond = " AND ".join("x.%s IS NOT DISTINCT FROM s.%s" % (c["name"].lower(), c["name"].lower()) for c in use)
-        f.write("INSERT INTO %s (%s) SELECT %s FROM %s s WHERE NOT EXISTS (SELECT 1 FROM %s x WHERE %s);\n" % (tgt, collist, collist, stage, tgt, cond))
+        # 이미 있는 행 제외 후 INSERT. EXCEPT ALL 은 해시 집합 연산(NULL 끼리 같은 값)이라 본 테이블이 수십만 행이어도 수 초.
+        # (NOT EXISTS + IS NOT DISTINCT FROM 은 인덱스를 못 타 1,986 x 326k 중첩 비교로 수십 분 걸림 - 2026-10-14 실측)
+        # append 전에 identity 시퀀스를 본 테이블 MAX+1 로 맞춤 (앞 파일이 본체를 새로 넣어 시퀀스가 뒤처지면 새 값이 기존 lic_index 와 겹침 - 2026-10-14 발견)
+        for c in cols:
+            if c["ident"] == "1":
+                f.write("SELECT setval(pg_get_serial_sequence('%s', '%s'), COALESCE((SELECT MAX(%s) FROM %s), 0) + 1, false);\n" % (tgt, c["name"].lower(), c["name"].lower(), tgt))
+        f.write("INSERT INTO %s (%s) SELECT %s FROM (SELECT %s FROM %s EXCEPT ALL SELECT %s FROM %s) d;\n" % (tgt, collist, collist, collist, stage, collist, tgt))
         f.write("DROP TABLE IF EXISTS %s;\n" % stage)
     if bad:
         log.warning("%s: %d malformed rows skipped", table, bad)
@@ -205,8 +211,11 @@ def convert(src: dict, table: str, cols: list[dict], path: str, skip_ident: bool
 
 # ---------------------------------------------------------------- 적용 스크립트
 def write_apply_scripts(out_dir: str, schema_files: list[str], cp) -> None:
-    """추출 폴더 안에 apply.sh / apply_commands.txt 생성. 데이터 파일은 폴더 안의 1?_data_*.sql 을 이름순으로 적용"""
-    pguser = cp.get("output", "pg_user", fallback="onlic")
+    """추출 폴더 안에 apply.sh / apply_commands.txt 생성. 데이터 파일은 폴더 안의 1?_data_*.sql 을 이름순으로 적용.
+    DB 는 만들지 않는다(서버에서 createdb 로 수동 생성) - 접속만 확인하고 없으면 안내 후 종료"""
+    pghost = cp.get("output", "pg_host", fallback="127.0.0.1")
+    pgport = cp.get("output", "pg_port", fallback="39999")
+    pguser = cp.get("output", "pg_user", fallback="nasacti")
     pgdb = cp.get("output", "pg_db", fallback="nasa_license")
     data_files = sorted(f for f in os.listdir(out_dir) if re.match(r"^1[0-9]_data_.*\.sql$", f))
     after = "13_after_insert.sql" if os.path.exists(os.path.join(out_dir, "13_after_insert.sql")) else ""
@@ -215,38 +224,62 @@ def write_apply_scripts(out_dir: str, schema_files: list[str], cp) -> None:
     def is_alarm(fname: str) -> bool:
         return any(re.search(r"_data_%s(_|\.)" % re.escape(a), fname.lower()) for a in alarm_srcs)
 
-    txt = ["# %s 적용 순서 (psql). 이 폴더를 Linux 서버로 복사한 뒤 그 폴더에서 실행. 재실행 가능" % os.path.basename(out_dir), ""]
+    conn = "-h %s -p %s -U %s -d %s" % (pghost, pgport, pguser, pgdb)
+    txt = ["# %s 적용 순서 (psql). 이 폴더를 Linux 서버로 복사한 뒤 그 폴더에서 실행. 재실행 가능" % os.path.basename(out_dir),
+           "# 전제: DB 는 수동으로 먼저 생성 (postgres 계정)  createdb -p %s -O %s -E UTF8 %s" % (pgport, pguser, pgdb),
+           ""]
     sh = ["#!/bin/bash",
           "# apply.sh - 이 폴더의 스키마·데이터를 PostgreSQL 에 적용 (재실행 가능)",
           "#   ./apply.sh        전부 적용 (서버 B=lic2: 라이선스 + 알람)",
           "#   ./apply.sh A      서버 A=lic : 알람 데이터 파일(12_*) 생략",
-          "#   접속: PGUSER / PGDATABASE / PGHOST / PGPASSWORD 환경변수 또는 ~/.pgpass",
+          "#   접속: PGHOST / PGPORT / PGUSER / PGDATABASE / PGPASSWORD 환경변수 또는 ~/.pgpass (아래 기본값)",
+          "#   DB 는 이 스크립트가 만들지 않는다. 없으면 postgres 계정으로:  createdb -p $PGPORT -O $PGUSER -E UTF8 $PGDATABASE",
           "set -e",
           'cd "$(dirname "$0")"',
           'ROLE="${1:-B}"',
-          'export PGUSER="${PGUSER:-%s}" PGDATABASE="${PGDATABASE:-%s}"' % (pguser, pgdb),
+          'export PGHOST="${PGHOST:-%s}" PGPORT="${PGPORT:-%s}" PGUSER="${PGUSER:-%s}" PGDATABASE="${PGDATABASE:-%s}"' % (pghost, pgport, pguser, pgdb),
           'PSQL="psql -v ON_ERROR_STOP=1"',
-          'echo "== apply $(basename "$PWD") role=$ROLE user=$PGUSER db=$PGDATABASE =="',
+          'echo "== apply $(basename "$PWD") role=$ROLE host=$PGHOST port=$PGPORT user=$PGUSER db=$PGDATABASE =="',
+          "",
+          "# DB 존재·접속 확인 (생성은 하지 않음)",
+          "if ! psql -tAc \"SELECT current_database()\" >/dev/null 2>&1; then",
+          '  echo "ERROR: DB 접속 실패 ($PGUSER@$PGHOST:$PGPORT/$PGDATABASE). DB 가 없으면 postgres 계정으로 먼저 생성:" >&2',
+          '  echo "       createdb -p $PGPORT -O $PGUSER -E UTF8 $PGDATABASE" >&2',
+          "  exit 1",
+          "fi",
+          'ENC=$(psql -tAc "SELECT pg_encoding_to_char(encoding) FROM pg_database WHERE datname = current_database()")',
+          'if [ "$ENC" != "UTF8" ] && [ "$ENC" != "EUC_KR" ]; then echo "ERROR: DB 인코딩 $ENC (UTF8 또는 EUC_KR 필요)" >&2; exit 1; fi',
           ""]
-    if "00_create_db.sql" in schema_files:
-        txt.append("# (최초 1회, 슈퍼유저) psql -U postgres -f 00_create_db.sql")
-        sh.append("# 최초 1회만 (롤/DB 생성, 비밀번호 수정 후): psql -U postgres -f 00_create_db.sql")
     if "01_nasa_license_schema.sql" in schema_files:
-        txt.append("psql -U %s -d %s -f 01_nasa_license_schema.sql" % (pguser, pgdb))
+        txt.append("psql %s -f 01_nasa_license_schema.sql" % conn)
         sh.append("$PSQL -f 01_nasa_license_schema.sql")
     for f in data_files:
         if is_alarm(f):
-            txt.append("psql -U %s -d %s -v ON_ERROR_STOP=1 -f %s   # 서버 A(lic) 는 생략" % (pguser, pgdb, f))
+            txt.append("psql %s -v ON_ERROR_STOP=1 -f %s   # 서버 A(lic) 는 생략" % (conn, f))
             sh.append('if [ "$ROLE" = "A" ]; then echo "skip %s (role A)"; else $PSQL -f %s; fi' % (f, f))
         else:
-            txt.append("psql -U %s -d %s -v ON_ERROR_STOP=1 -f %s" % (pguser, pgdb, f))
+            txt.append("psql %s -v ON_ERROR_STOP=1 -f %s" % (conn, f))
             sh.append("$PSQL -f %s" % f)
     if after:
-        txt.append("psql -U %s -d %s -f %s" % (pguser, pgdb, after))
+        txt.append("psql %s -f %s" % (conn, after))
         sh.append("$PSQL -f %s" % after)
     sh.append('echo "== done =="')
     io.open(os.path.join(out_dir, "apply_commands.txt"), "w", encoding="utf-8", newline="\n").write("\n".join(txt) + "\n")
     io.open(os.path.join(out_dir, "apply.sh"), "w", encoding="utf-8", newline="\n").write("\n".join(sh) + "\n")
+
+
+def copy_schema_and_apply(out_dir: str, cp, config_path: str) -> list[str]:
+    """스키마 파일(01)을 추출 폴더에 복사하고 apply.sh / apply_commands.txt 생성. --regen-apply 와 본 추출 공용"""
+    schema_dir = resolve_dir(config_path, cp.get("output", "schema_dir", fallback="../Source/onlic/db"))
+    copied = []
+    for fn in ("01_nasa_license_schema.sql",):
+        src_f = os.path.join(schema_dir, fn)
+        if os.path.exists(src_f):
+            shutil.copyfile(src_f, os.path.join(out_dir, fn)); copied.append(fn)
+        else:
+            log.warning("스키마 파일 없음: %s", src_f)
+    write_apply_scripts(out_dir, copied, cp)
+    return copied
 
 
 # ---------------------------------------------------------------- 메인
@@ -276,10 +309,18 @@ def main(argv=None) -> int:
     ap.add_argument("--out", default="", help="출력 루트 (기본 ini [output] dir = 스크립트 폴더). 아래에 YYYYMMDD_HHMMSS 폴더 생성")
     ap.add_argument("--dry-run", action="store_true", help="행수만 확인하고 파일을 만들지 않음")
     ap.add_argument("--keep-work", action="store_true", help="bcp 중간 파일 보관")
+    ap.add_argument("--regen-apply", default="", metavar="DIR", help="추출 없이 기존 추출 폴더의 apply.sh/apply_commands.txt/01 스키마만 다시 생성")
     a = ap.parse_args(argv)
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     cp = load_config(a.config)
+    if a.regen_apply:
+        d = os.path.abspath(a.regen_apply)
+        if not os.path.isdir(d):
+            sys.exit("폴더 없음: %s" % d)
+        copied = copy_schema_and_apply(d, cp, a.config)
+        print("regen: %s  (schema=%s, apply.sh, apply_commands.txt)" % (d, ",".join(copied) or "-"))
+        return 0
     srcs = parse_sources(cp)
     if a.source != "all":
         pick = {x.strip() for x in a.source.split(",")}
@@ -365,16 +406,8 @@ def main(argv=None) -> int:
         if all_tables:
             f.write("SELECT " + " UNION ALL SELECT ".join("'%s' AS t, COUNT(*) AS cnt FROM %s" % (t.lower(), t.lower()) for t in all_tables) + ";\n")
 
-    # 스키마 파일 복사 + 적용 스크립트 (폴더만 서버로 옮기면 되도록)
-    schema_dir = resolve_dir(a.config, cp.get("output", "schema_dir", fallback="../Source/onlic/db"))
-    copied = []
-    for fn in ("00_create_db.sql", "01_nasa_license_schema.sql"):
-        src_f = os.path.join(schema_dir, fn)
-        if os.path.exists(src_f):
-            shutil.copyfile(src_f, os.path.join(out_dir, fn)); copied.append(fn)
-        else:
-            log.warning("스키마 파일 없음: %s", src_f)
-    write_apply_scripts(out_dir, copied, cp)
+    # 스키마 파일 복사 + 적용 스크립트 (폴더만 서버로 옮기면 되도록. DB 생성 스크립트는 없음 - 수동 createdb)
+    copy_schema_and_apply(out_dir, cp, a.config)
 
     report.append("")
     report.append("elapsed %.1fs  out=%s" % (time.time() - t0, out_dir))

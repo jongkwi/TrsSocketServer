@@ -81,9 +81,21 @@ void CMwTimer::KillUserAllTimer()
 
 void CMwTimer::EndUserTimer()
 {
+	pthread_t tid = 0;
+	int i = 0;
 	__timer_run = FALSE;
 	if(pTimer != NULL){
+		/* TimerObjectKill 은 1초만 기다린다. LinkCheck_OnTimer 가 DB 호출 중(최대 로그인 30초 + 문장 10초)이면
+		** 스레드가 살아 있는 채 delete 되므로, timer_pid 가 0 이 될 때까지 기다려 join 한다 (L5). 안 끝나면 delete 하지 않는다 */
+		tid = pTimer->timer_pid;
 		pTimer->TimerObjectKill();
+		for(i = 0; i < 450; i++){ if(pTimer->timer_pid == 0) break; WaitMSleep(100); }
+		if(pTimer->timer_pid != 0){
+			OnlicLogf(LOG_SOFT, "timer thread [%s] did not exit in 45s - object left for process exit", m_szTimerName);
+			pTimer = NULL;
+			return;
+		}
+		if(tid != 0) pthread_join(tid, NULL);
 		delete pTimer;
 		pTimer = NULL;
 	}

@@ -6,9 +6,7 @@
 #ifndef ___ONLIC_DEFINE_H___
 #define ___ONLIC_DEFINE_H___
 
-#ifndef FD_SETSIZE
-#define FD_SETSIZE 2048
-#endif
+/* (FD_SETSIZE 재정의 삭제: glibc 에서 무효. 소켓 루프는 poll() 사용 - 2026-10-14) */
 
 #include <ListObject/ListObject.h>
 #include <LogObject/LogObject.h>
@@ -59,8 +57,8 @@
 #endif
 
 /* 버전 */
-#define ONLIC_VERSION			"1.0.0.1"
-#define ONLIC_LAST_UPDATE		"2026-10-13"
+#define ONLIC_VERSION			"1.0.0.2"
+#define ONLIC_LAST_UPDATE		"2026-10-14"
 #define ONLIC_WIN_BASE_VERSION	"TrsSocketServer 1.0.0.7"	/* 포팅 원본 */
 
 #ifndef PID_FILE
@@ -70,6 +68,7 @@
 
 #define	LISTENQ					1024	/* listen() backlog */
 #define	MAX_PRINT				500
+#define LOG_PATH_MAX_LEN		70		/* CLogObject::m_log_path[100] - "/sqlerr_YYYY-MM-DD_LIC.log" (L3) */
 #define MAX_RECV_BUFF			2048	/* 워커 큐 항목 버퍼 */
 
 /* ---------------- 클라이언트 호환 상수 (StdAfx.h / 프로토콜명세 §1~§2) ---------------- */

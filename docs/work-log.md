@@ -1,5 +1,143 @@
 # 작업 로그
 
+## [2026-10-14] DB 생성 수동화 + 복원 스크립트를 실 서버 구성(PG15 39999, nasacti)에 맞춤
+
+### 작업 내용
+- 사용자가 Rocky 서버(onipx)의 기존 PostgreSQL 15(포트 39999)에 `createdb -p 39999 -O nasacti -D pg_default -E UTF8 nasa_license` 로 DB 를 수동 생성 → "DB 는 무조건 수동 생성, 나머지 복원 부분 수정" 요청
+- `Source/onlic/db/00_create_db.sql` 삭제(git rm, `_backup/` 보관). 롤 `onlic` 신설 계획 폐기 → 기존 롤 `nasacti` 사용
+- `scripts/db_export_mssql_to_pg.py`
+  - `write_apply_scripts`: 생성되는 `apply.sh` 가 DB 를 만들지 않고 **접속 확인 + 인코딩(UTF8/EUC_KR) 확인** 후 실패 시 `createdb` 안내하고 종료. 기본 접속 `127.0.0.1:39999 nasacti nasa_license` (ini `[output] pg_host/pg_port/pg_user/pg_db`, 환경변수 PGHOST/PGPORT/PGUSER/PGDATABASE 로 덮어쓰기). `apply_commands.txt` 도 `-h -p -U -d` 전체 표기
+  - `copy_schema_and_apply` 분리: 추출 폴더에 `01_nasa_license_schema.sql` 만 복사(00 복사 제거)
+  - 신규 옵션 `--regen-apply <폴더>`: 추출 없이 기존 폴더의 `apply.sh`/`apply_commands.txt`/01 사본만 재생성 → `Source/onlic/db/data/20261013_165211`, `20261013_171713` 두 폴더에 적용(구버전 추출이라 apply.sh 가 없었음). `bash -n` 통과
+  - 패치 중 heredoc 이스케이프 실수로 `io.open(... newline=)` 줄이 깨져 SyntaxError 1회 → Edit 로 복구, `py_compile` 통과
+- `scripts/db_export.ini.sample` + 로컬 `db_export.ini`: `pg_host=127.0.0.1 pg_port=39999 pg_user=nasacti` 추가
+- `02a/02b *.load`: INTO `postgresql://nasacti:PASSWORD@127.0.0.1:39999/nasa_license`
+- `01_nasa_license_schema.sql` 헤더 적용 절차 수정(수동 createdb 전제)
+- `Source/onlic/db/README.md`: §0 "DB 생성은 수동" 신설(명령·인코딩 대안·재생성·접속 덮어쓰기), 파일표·적용 절차·pgloader 절차에서 00 제거 및 `nasacti@39999` 로 통일, `--regen-apply` 안내
+- `docs/작업요약_2026-10-13.md` §8-2 갱신
+
+### 서버 적용 결과 (추가, 같은 날)
+- 사용자가 오늘 재추출(`scripts/20261014_150341`, 44 IPCS_LOG 326,341행)한 폴더를 서버 onipx 에 복사해 `./apply.sh`(B 역할) 실행 → `== done ==`. 최종 건수: lic_access_list 859, nasa_lic 698, ipcs_log **328,319**, callcenter_link 2,050, site_sms_user 25,649, site_sms_basic_user 28, site_email_user 8, site_smsexcludetime 4
+- ipcs_log 328,319 = 326,341 + 1,986 − **8**: 7 의 IPCS_LOG 중 44 와 5컬럼이 완전히 같은 행 8건을 append 모드가 건너뜀(로컬 SQL 파일 대조로 확인). 정상
+- **문제**: `12_data_7.sql` 의 IPCS_LOG 병합 문장(`NOT EXISTS ... IS NOT DISTINCT FROM` 5컬럼)이 인덱스를 못 타 1,986 × 326k 중첩 비교 → 사용자가 멈춘 것으로 오인할 만큼 오래 걸림(수 분). 완료는 됨
+- **수정**: 생성기 `convert()` 의 병합을 `INSERT ... SELECT ... FROM (SELECT ... FROM _stage EXCEPT ALL SELECT ... FROM 본테이블) d` 로 교체(해시 집합 연산, NULL 동등 취급, 의미 동일). 이미 추출된 로컬 폴더 5개(`Source/onlic/db/data/2026101*`, `scripts/2026101*`)의 `12_data_7.sql` 도 같은 문장으로 치환. 서버에 올린 사본은 이미 적용 완료라 재전송 불필요
+
+### 서버 DB 원격 검증 (추가, 같은 날) — PC 의 psql 16 으로 203.239.159.43:39999 `nasacti` 접속 (비밀번호는 로그·문서에 기록 안 함)
+- PostgreSQL 15.17, `nasa_license` UTF8 / en_US.utf8, 58 MB. 테이블 19개 전부 존재, 소유자 nasacti, PK 13 + FK 1, 인덱스 22
+- 건수: 19개 테이블 전부 `scripts/20261014_150341/_report.txt` 와 일치 (ipcs_log 는 326,341+1,986−8 중복 = 328,319)
+- identity 시퀀스 16개 모두 `MAX+1, is_called=false` 로 보정됨 → 다음 INSERT 충돌 없음
+- 앱 쿼리 확인: `lic_access_list` 190.7 IP 조회 1건, `CallCenter_Link cc_use='Y' AND cc_link_error='N'` 381, cc_use Y 607/N 1,443, sms_use T 11,647/X 13,999/Y 3. `cc_update_time` 은 `YYYYMMDDHHMMSS` 문자열 그대로. IPCS_LOG 최신 2026-10-14 15:00
+- **이슈(인코딩)**: 문자 컬럼 159개를 `convert_to(col,'EUC_KR')` 전수 검사 → 2개 실패. `callcenter_link_reference.comment` 에 '튵'(U+D2B5, KS X 1001 밖의 CP949 확장 한글) / `ipcs_log.log_ip` 에 U+FFFD(추출 시 해석 불가 스캐너 바이트 치환). **PostgreSQL 의 `EUC_KR` 은 완성형 2,350자만 지원** → CP949 확장 한글이 들어오면 onlic 이 `client_encoding=EUCKR` 로 읽을 때 변환 오류. `convert_to(col,'UHC')`(CP949) 로 재검사하면 `ipcs_log.log_ip` 의 U+FFFD 만 실패(onlic 은 log_ip 를 SELECT 하지 않고 INSERT 만 하므로 영향 없음, 비 IP 값 12,394행은 스캐너 쓰레기)
+- **권고**: onlic `CLIENT_ENCODING` 을 `EUCKR` → **`UHC`** 로 (PG 클라이언트 전용 인코딩, CP949 = Windows-949 와 동일). 바꿀 곳: `Source/onlic/cfg/onlic.ini.sample:31`, `ConfigLoad.cpp:85` 기본값, `docs/리눅스참조구조.md:138`, `docs/DB스키마.md:39`, `db/README.md` §0. 사용자 확인 후 적용
+- 검사 중 psql.exe(Windows) 가 `-c` 의 한글·`SET client_encoding` 이후 쿼리를 콘솔 코드페이지로 보내 3회 오류 → 데이터 문제 아님(ASCII 구문으로 재검사)
+
+### 쓰레기 데이터 정리 (추가, 같은 날)
+- 사용자 "필요없으면 빼게" → 정체 확인: (1) `callcenter_link_reference` 59행 중 55행이 사이트 22184(123stepupCTI) 의 OnAlarm 웹 테스트 입력(키보드 난타), 그중 3행(ccr 16·24·52)이 CP949 확장 한글(튵·퓽·녿·슽) (2) `ipcs_log.log_ip` U+FFFD 11,626행 = IVR(주로 218.238.95.246, 2017-02~2024-09)이 보낸 깨진 IP 문자열, 행 자체(log_real_ip·시각·타입)는 정상. 그 외 IP 아닌 값 768행(`??`, `pbx2.synaptory.com` 등)은 변환 문제 없어 유지
+- `Source/onlic/db/04_cleanup.sql` 신규(재실행 가능): 22184 참조 메모 DELETE + U+FFFD 행의 `log_ip=''` UPDATE(행 유지) + 검증 SELECT. 생성기 `copy_schema_and_apply` 가 01 과 함께 복사, `apply.sh` 마지막 단계로 실행. `scripts/20261014_150341` 에 `--regen-apply` 반영
+- 서버에 직접 DELETE/UPDATE 실행은 Claude Code 권한 분류기(Mass Delete)에 막혀 미적용 → 사용자가 재추출·재복원(또는 `04_cleanup.sql` 단독 실행)으로 적용하기로
+- **원복(사용자 요청 16:02)**: `04_cleanup.sql` 작성 취소. 파일은 `_backup/04_cleanup.sql.bak_20261014_160223` 로 이동, 생성기 복사·`apply.sh` 마지막 단계·README 표기 제거, `scripts/20261014_150341` apply.sh 재생성. 쓰레기 데이터(참조 메모 55행, log_ip U+FFFD 11,626행)는 **정리하지 않고 그대로 둠**. 자세한 정체: 참조 메모는 190.7 OnAlarm 웹(2025-05-20 생성 테이블)의 테스트 입력, log_ip 는 IVR(218.238.95.246)이 `IP:` 뒤에 보낸 초기화 안 된 버퍼를 서버가 그대로 기록한 것(판정은 log_real_ip 사용)
+
+### Rocky 9 첫 빌드 (추가, 같은 날) — 사용자가 서버 onipx 에서 `cd linux && make`
+- 라이브러리 5개(`liblist_object` `liblog_object` `liburl_en_de` `libshare_lib` `libtimerobject`) 빌드 성공. 앱 링크 단계에서 오류 1 + 경고 1종
+- **오류** `HttpWaitStack.cpp:138: 'struct ALARM_OBJ' has no member named 'alert_type'` → Windows `AlramWeb.h:30` 의 `int alert_type`(저장만, 미사용)을 `struct_def.h` ALARM_OBJ 로 옮길 때 누락. `struct_def.h` 에 `int alert_type;` 추가 (원본 동일)
+- **경고** `SocketThread.h:9-10 F_READING/F_DONE redefined`(onmw `shareheader.h:218/220` 과 충돌) → `F_CREATE/F_READING/F_DONE` 3줄은 어디서도 미사용이라 제거
+- 두 파일 EUC-KR+CRLF 유지, `_backup/*.bak_20261014_154453` 백업. 서버 재빌드 대기(다음 오류·링크 오류 가능)
+- 2차 빌드: 헤더 2개 미반영 상태로 빌드돼 경고 재현(scp 안내). 3차 빌드: **컴파일 전부 통과**, 링크에서 `cannot open output file ../bin/onlic`(서버에 `bin/` 폴더 없음) → `linux/Makefile_64bit` 의 `all:`·`onlic:` 타깃 첫 줄에 `mkdir -p ../bin ../lib ../log` 추가(LF 유지)
+- 4차 빌드: 링크 `undefined reference to Malloc(unsigned long)`(TimerObject.cpp:238·407). `Malloc` 은 `libshare_lib.a`(WinMalloc.cpp) 에 있는데 `-lshare_lib` 가 `-ltimerobject` 앞이라 미해소. onmw 는 `*.o` 를 같이 링크해 가려졌던 문제 → 앱 링크 줄 2곳을 `-Wl,--start-group -llist_object -llog_object -ltimerobject -lurl_en_de -lshare_lib -Wl,--end-group` 으로 수정
+
+### 원본 MSSQL 재확인 (추가, 사용자 요청 "7번 DB 에서 깨진 데이터 확인", 읽기 조회)
+- `IPCS_LOG.LOG_IP` 쓰레기는 **원본에 그대로 존재**(이관 산물 아님). 190.7: 1,986행 중 비IP 109·비ASCII 88행(예: `80 3F 01`, `E0 BD 41 01`, 0x01 제어문자 포함, 송신지 14곳: 175.208.11.77 50행(2017-12-15) 등). 190.44: 326,345행 중 비IP 12,285·비ASCII 8,357행(218.238.95.246 7,722행 2023-04~2024-09, 203.234.226.33 167행 등, 최신 2026-03-04 211.33.155.24). PATINDEX 집계라 PG 측 U+FFFD 11,626행과 집계 방식 차이 있음
+- `CallCenter_Link_Reference`(190.7): 15:30 조회 때 59행(사이트 22184 테스트 55행) → **16시 재조회 시 3행만 남음**(ccr 59 사이트 21654 실메모 2025-11-18, ccr 60·61 사이트 22184 `test` 2026-10-14 15:42:02 신규). 테스트 메모 56행이 원본에서 오늘 삭제됨(OnAlarm 웹 쪽 작업 추정, 사용자 확인 필요). 재추출하면 PG 도 동일해짐
+
+### 43 서버 재복원 검증 (추가, 사용자가 `scripts/20261014_162559` 로 재추출·재복원)
+- 19개 테이블 건수 원본과 전부 일치(ipcs_log 328,323 = 326,345 + 1,986 − 8). `callcenter_link_reference` 3행(원본 정리 반영). 시퀀스 보정 정상(ipcs_log 646135, ccr 62)
+- 전 테이블 전컬럼 동일 행 중복 검사: 이관으로 생긴 중복 0. `site_sms_user` 225행 중복은 **원본 MSSQL 에도 동일**(25,649 / distinct 25,424, PK 없음) → 그대로 이관된 것
+- `ipcs_log`: `lic_index` 644157~644160 이 2행씩 겹침(PK 는 (lic_index, lic_insert_date) 라 오류 없음). 원인: 12_data_7 의 append INSERT 가 13_after_insert 의 setval **이전**에 실행되어 시퀀스가 지난 복원 값(644157) 에 머문 채 새 값을 부여 → 44 본체의 기존 lic_index 와 충돌. 생성기 `convert()` 수정: append INSERT 직전에 identity 컬럼 setval(MAX+1) 추가. 다음 복원부터 해소
+- `ipcs_log` 5컬럼 동일 행 203,107 은 44 원본의 반복 기록(같은 분에 같은 사이트 15회 등) → 정상. append 의 EXCEPT ALL 이 건너뛴 8행은 lic·lic2 양쪽에 같은 분에 기록된 정상 이벤트일 가능성 있으나 **사용자: ipcs_log 는 중요 데이터 아님, 깨진 데이터 실패 무방** → 추가 조치 없음
+- EUC_KR 변환: 159 컬럼 중 `ipcs_log.log_ip` 1개만 실패(U+FFFD) → 위 결정으로 무시
+
+### 기동 배너·실행 스크립트 (추가, 사용자 요청 "onmw 처럼 띄워 달라")
+- `onlicmain.cpp` `OnlicIntro()` 를 onmw `NcmwIntro()` 와 같은 61칸 상자형 배너로 교체(제품명·Release Version·컴파일 정의·포팅 원본·Copyright). 기동 완료 메시지 `onlic Server Start!!` → `License/Alarm Relay Server Start!!`. EUC-KR+CRLF 유지, `_backup/onlicmain.cpp.bak_20261014_164715`
+- `bin/runonlic` 신규(onmw `runmw` 대응, ASCII): `./onlic -d -c ../cfg/onlic.ini`. `doc/` 의 runmw·mwcron·ps_mw.chk.sh 는 아직 onmw 원본 그대로(acromw 이름·경로) → 사용자 확인 후 onlic 경로로 수정 예정
+- 확인: 실행 옵션은 onmw 와 동일(-d/-c/-p/-v/-h), `-n ip4/ip6`·`-s`·`-i` 없음, `-l`(포그라운드 로그) 추가. `MY_IP` 빈값 = INADDR_ANY(권장). ini 파서가 `;` 주석과 값 끝 공백을 제거하므로 샘플 인라인 주석 사용 가능. `GetPrivateProfile.cpp:42-63`
+- 발견: Bash 도구 heredoc 안에서 `\\n` 이 한 단계 풀려 Python 에 `\n` 으로 전달됨 → 앞서 io.open 줄 깨짐·패턴 불일치의 원인. 백슬래시가 든 패치는 Write 로 .py 파일을 만든 뒤 실행하는 방식으로 전환
+
+### onlic 소스 최종 검증 (추가, 사용자 요청) — 검토 에이전트 3개 병렬(소켓·프레이밍 / 업무로직·DB / 기동·워커·HTTP) + 핵심 지적 직접 재확인
+**높음 (수정 필수)**
+- S1 `SocketThread.cpp:256-267`→`SockProcLic.cpp:43-46`: 6321 응답을 워커가 fd 번호 사본으로 send. 클라이언트 5초 타임아웃·유휴 정리로 세션이 닫힌 뒤 같은 fd 가 새 접속/ODBC/로그파일에 재사용되면 엉뚱한 곳에 "Run" 전송(미허가 장비 Run 가능). Windows 는 단일 스레드라 없던 문제. 수정: SOCK_RECV_WAIT 에 sock_seq, 전송 전 리스트 뮤텍스 아래 세션 일치 확인
+- S2 `onlicDefine.h:9-11` FD_SETSIZE 2048 재정의는 glibc 에서 무효(1024 고정). fd≥1024 면 FD_SET 스택 밖 쓰기·select EINVAL 무한 루프, EMFILE 시 accept 실패 반복으로 CPU 100%. 수정: accept 후 fd≥FD_SETSIZE 즉시 close, EMFILE 시 100ms 대기, setrlimit, 운영 idle timeout 사용(장기: poll)
+- S3 `SocketThread.cpp:229,276` 뮤텍스 보유 중 블로킹 send(논블로킹·SNDTIMEO 없음). 뷰어 PC 절전으로 송신버퍼 차면 이벤트 워커가 alarm_socklist_mutex 쥔 채 영구 블록 → UDP 처리·ACK 전면 정지. 수정: MSG_DONTWAIT 추가, EAGAIN 은 실패 집계(Windows CAsyncSocket 과 동일)
+- L1 `ShareLib/GetPrivateProfile.cpp:34,67` ini 값·기본값을 printf 포맷으로 nprintf 에 전달(onmw 원본 동일). [ALARM_MSG] 값의 %s 가 varargs 로 해석되어 기동 시 크래시/쓰레기, 비밀번호·URL 의 % 도 깨짐. 수정: "%s" 포맷 경유 (2줄)
+- L2 `ShareLib/nprintf.cpp:12-19` 는 무제한 vsprintf 후 검사, err_quit 는 출력만(종료 없음) → 초과 시 조용한 오버플로. 도달 경로: `HttpWaitStack.cpp:301-331` email_title[201] = cc_name(≤256)+ip+proc, `AlarmProc.cpp:335-497` szMsg[1024] 는 [ALARM_MSG] 511자 문구 시 초과, `ConfigLoad.cpp:75-85` DSN/UID/PWD 51 초과값. 수정: onlic 쪽 nprintf 를 vsnprintf 절단으로(라이브러리 사본 수정) + 사이트명 상한
+- B1 `AlarmProc.cpp:272` cc_nasupload_fail 비교값이 'YYYY-MM-DD'(DbLic_TodayHyphen). **Windows 원본 `TrsSocketServer.cpp:812` 는 YYYYMMDD** (하이픈 :1560 은 로그 파일명 전용) → 확인결정사항 B12 의 전제가 오독, 운영값 20240822 가 현 소스와 일치. 영향: 절체 후 전 사이트 첫 303/304 가 긴급 1회 오발, 이후 형식 불일치. 수정: DbLic_Today8 사용, B12 정정
+- B2 `DirectODBC.cpp:90`·`ConfigLoad.cpp:85` client_encoding EUCKR → CP949 확장 한글 INSERT/SELECT 실패. 수정: 기본값·샘플 UHC (오늘 DB 검증과 동일 결론)
+**중간**
+- B3 `DirectODBC.cpp:111` m_nConn==TRUE 일 때만 SQLDisconnect → 08xxx 단절 후 재접속마다 DBC+ENV+드라이버 소켓 누수. 수정: 무조건 SQLDisconnect
+- B4 `DirectODBC.cpp:310` SqlEscape 가 개행을 공백으로 → TXT_TABLE_CHECK/TXT_NEW_SITE 알림톡 문구 줄바꿈 소실(원본은 유지). 수정: CR/LF/TAB 통과
+- B5 `DirectODBC.cpp:118-124,219-226` 모든 실패에 재접속(데이터 오류 포함), DB 불통 시 쿼리당 LOGIN_TIMEOUT 30초×2. 수정: 08xxx 일 때만 재접속, LIC 로그인 타임아웃 3~5초
+- B6 `AlarmProc.cpp:606-626` vs `:423-430` 타이머·워커 경합(21분 경계 LINK_CHECK 직후 타이머가 'Y' 전이 → 가짜 장애/복구). 수정: SetLinkError 에 cc_update_time 조건 + 영향행 0 이면 알람 생략
+- S4 `SocketThread.cpp:349,364` 유휴 정리가 응답 대기 중 세션을 닫음(S1 과 결합). 수정: pending 카운터
+- L3 `ConfigLoad.cpp:71` LOG_PATH 255 허용 vs LogObject m_log_path[100]/szFullFilename[101] → 78자 초과 시 로그 스레드 오버플로. 수정: 70자 상한 검사
+- L4 `onlicmain.cpp:265-276` quit_func 가 syslog·OnlicLog(뮤텍스) 호출 후 플래그 설정 → 로그 스레드에 시그널 오면 자기 교착, TERM 무시. 수정: 핸들러는 플래그만
+- L5 종료 시 스레드 join 없이 3초/1초 대기 후 delete(`HttpWaitStack.cpp:112`, `RecvWaitStack.cpp:211-217`, `MwTimer.cpp:82-89`), curl 타임아웃 10초·DB 30초보다 짧음. Pthread_kill(SIGINT) 는 스레드를 죽이지 못함. 수정: pthread_join(상한 대기)
+- L6 `onlicmain.cpp:78→87` 중복 실행 검사가 StartSystem 뒤 → 2번째 인스턴스가 DbLic_UpdateTimeAll 로 전 사이트 cc_update_time 초기화(실 장애 21분 은폐). 수정: PID 검사를 StartSystem 앞으로
+- L7 `onlicmain.cpp:82,90` 실패 시 return 0 + StopOnlicSystem 미호출, 포트 점유 오류가 stdout 에 안 나옴. 수정: return 1, SOCK_ERROR 는 PRINT, Stop 호출
+- L8 `SystemLoad.cpp:360-364` `-l` 옵션이 로그 객체 생성 후 무효. 수정: m_nLogView 면 stdout 병행
+**낮음**: S5 UDP ETX<STX 순서 datagram 을 빈 이벤트로 처리 / S6 recv -1 EINTR·EAGAIN / S7 종료 순서(소켓 close 후 워커 send, S1 로 해소) / S8 framing_sim.py 500 경계 벡터가 499바이트(테스트 보강) / B7 NAS_CON_FAIL 읽기 실패 시 -1→0 vs 0→1 / B8 [ALARM_MSG] 검증이 % 개수만 / B9 MSSQL 핸들에도 set client_encoding 전송(sqlerr 1건) / L9 로그 줄 4200 초과 시 링 슬롯 침범 ≤23B / L10 curl_global_init 가 HTTP 스레드 기동 뒤 / L11 daemon_init 이 0/1/2 미리다이렉트 / L12 ini 값의 `;` 절단, CLIENT_ENCODING 미검증 / 비원자 s_sock_seq++
+**이상 없음 확인**: Framing 바이트 규칙 1:1(strlen 절단·마지막 STX~첫 ETX·500/1000), 6321 raw Run/Close·미응답 조건, UDP ACK 5경로, 6770 푸시·하트비트 프레임, ServerUdpProc nType 전부 패리티(문구·템플릿·긴급·cc_pause·제외시간·신규1·NAS 10/999·21분 전이), SQL 전부 DDL 과 컬럼명·개수 일치(SITE_EMAIL_USER 16=16), ESC 전수 적용, new[]/delete[] 쌍, 워커 큐 mutex/cond, 타이머 재진입 없음, HTTP 버퍼 크기, 배너 61칸
+
+### 최종 검증 결함 수정 (1~4단계, 사용자 승인 "poll 방식으로 변경하고 모두 수정")
+백업 `_backup/onlic_20261014_173621/`(32개). 전부 EUC-KR+CRLF 유지(Write 로 스크래치에 작성 → cp949 변환 / Python 패치). 버전 `1.0.0.2 / 2026-10-14`
+**1단계 소켓 (`SocketThread.cpp` 전면 재작성)**
+- S2 `select`→**`poll()`**: `BuildPollFds()` 가 리스트에서 pollfd 배열 구성(리슨 [0] + 세션), fd 1024 제한 제거. `onlicDefine.h` 의 무효한 `FD_SETSIZE 2048` 삭제. `Tcp_Accept` EMFILE/ENFILE 시 100ms 대기(CPU 폭주 방지), `onlicmain.cpp RaiseFdLimit()` 로 RLIMIT_NOFILE soft=hard
+- S1 `Lic_SendResponse(sock_seq, handle, data, len)` 신설: 워커(`SockProcLic.cpp:43`)는 fd 사본으로 직접 send 하지 않고 리스트 뮤텍스 아래 (handle, sock_seq) 일치 세션에만 송신. `SOCK_RECV_WAIT.sock_seq` 추가, `s_sock_seq` 는 `__sync_add_and_fetch`
+- S3 모든 TCP send 에 `MSG_DONTWAIT` (뮤텍스 보유 중 블로킹 금지, EAGAIN 은 실패 집계·세션 유지 = Windows CAsyncSocket 동작)
+- S4 `ONLIC_SOCKET.pending`(워커 적재 수) 추가, 유휴 정리는 `pending<=0` 세션만. S6 recv EINTR/EAGAIN 유지. S7 종료 순서는 S1 로 해소
+- S5 `Framing_UdpExtract` 프레임 없음 = **-1**(빈 프레임 STX ETX 는 0), UDP 루프의 strchr 보정 삭제. `framing_test.cpp` 는 -1 → "none"
+**2단계 DB·라이브러리·설정**
+- B1 `AlarmProc.cpp:272` `DbLic_Today8`(YYYYMMDD) 로, `DbLic_TodayHyphen` 삭제. 문서 B12 정정
+- B2 `ConfigLoad.cpp` 기본 `UHC`, `onlic.ini.sample CLIENT_ENCODING=UHC`, `DirectODBC::SetSessionProc` 값 검증([A-Za-z0-9_]). 리눅스참조구조·DB스키마 반영
+- B3 `DisConnectODBC` 는 `m_nConn` 과 무관하게 `SQLDisconnect` (08xxx 뒤 DBC/ENV 누수 차단)
+- B4 `SqlEscape` CR/LF/TAB 통과 (TXT_TABLE_CHECK·TXT_NEW_SITE 알림톡 줄바꿈 보존)
+- B5 `OpenTable/ExecSql` 재접속은 `m_nConn==FALSE`(08xxx·핸들 오류)일 때만. `DATABASEINFO.lLoginTimeout` 신설: LIC 5초, ATALK/SMS 30초(`SystemLoad.cpp:137`)
+- B6 `DbLic_SetLinkError(..., szLocalDay14)` 가 `AND cc_link_error='N' AND cc_update_time<='기준'` 조건으로 갱신 행 수 반환(신설 `CDirectODBC::ExecSqlRows/ExecLastSqlRows`, `ExecSql` 은 이를 래핑). `LinkCheck_OnTimer` 는 'Y' 전이를 먼저 하고 0행이면 알람·알림톡·메일 생략(타이머·UDP 워커 경합 제거). DB 오류(-1) 는 원본대로 알람
+- B7 NAS_CON_FAIL 읽기 실패 -1 유지(원본 -1→++→0). B8 `[ALARM_MSG]` 검증을 변환 지정자 순서 비교(`AlarmText_FmtSpec`)로. B9 `DATABASEINFO.nDbType` + ini `SMS_DB_TYPE`(기본 1=MSSQL): PG 세션 설정은 PG 핸들에만
+- L1 `ShareLib/GetPrivateProfile.cpp:34,67` ini 값·기본값을 `"%s"` 로 전달(포맷 문자열 주입 차단). L2 `ShareLib/nprintf.cpp` `vsnprintf(buf, size+2)` 로 절단(호출 관례 sizeof-1 유지). 두 파일 머리에 onmw 와의 차이 주석. `HttpWaitStack.cpp` 메일 제목은 사이트명 100바이트 절단(`Framing_HangulStrCut`)
+**3단계 기동·종료**
+- L4 `quit_func/pipe_func` 는 `volatile sig_atomic_t` 플래그만, 로그·syslog 는 메인 루프. L6 PID 중복 검사를 `StartSystem` **앞**으로(ini PID_FILE 선독). L7 실패 시 `return 1` + `StopOnlicSystem()`, SOCK_ERROR 는 stdout 에도. L8 `-l` 이면 로그 객체와 무관하게 stdout 병행. L9 `OnlicLogf` `MAX_LOG_CHAR-32`. L10 `curl_global_init` 을 StartSystem 앞으로. L11 데몬은 기동 메시지 출력 후 `DetachStdio()` 로 0/1/2 → /dev/null (배너는 터미널에 보임). L3 `LOG_PATH_MAX_LEN 70` 초과 시 CONFIG 오류
+- L5 join: `StopOnlicSystem` 소켓 스레드 `JoinThreadVar`(5초), `CRecvWait::Kill` 45초 대기 후 `pthread_join`(미종료 시 DB 핸들 해제 생략), `CHttpWait::Kill` 15초, `CMwTimer::EndUserTimer` 45초(미종료 시 delete 생략). `Pthread_kill(SIGINT)` 전부 제거
+**4단계 테스트·문서**
+- S8 `framing_sim.py`: residual_overflow 주석 정정, `frame_split_near_500`(498+1)·`frame_over_500_lost`(500B 잔여 폐기 규칙) 추가, `udp_none` 벡터(ETX 가 STX 앞 → none). `framing_vectors.txt` 재생성. `확인결정사항.md` B12 정정, `리눅스참조구조.md` §4·ini, `DB스키마.md` §1.2·§1.3, `Source/onlic/README.md`
+**낮음 중 미반영**: L12 ini `;` 절단은 파서 사양으로 샘플 머리에 명시만. B9 는 ini 스위치로 대체. 그 외 낮음 항목은 모두 반영
+
+### 신규 기능: 재시작 직후 링크 장애 알림 억제 (사용자 요청)
+- 요청: 재시작 후 21분 타이머가 "링크데이터가 수신되고 있지 않습니다" 를 묶음 발송 → 재시작 이후 첫 판정은 무시
+- 원인: 기동 시 정상 사이트의 cc_update_time 을 현재로 초기화 → 21분 뒤 그 사이 LINK_CHECK 가 없던(재시작 전부터 죽어 있던) 사이트 전부 판정. 에이전트 주기 5분이므로 창 = 21+5 분
+- 구현: `[LINK_CHECK] STARTUP_SILENT_MIN=26`(0=끔). `AlarmProc.cpp` `LinkCheck_OnTimer` 에 기동 시각(s_tStart) 기록, 창 안 판정은 `DbLic_SetLinkError` 로 Y 전이만 하고 `SilentSite_Add` 후 알림 전부 생략(로그 `LinkCheck startup silent`). `SEND_TYPE_LINK_CHECK` 수신 시 `SilentSite_Remove` 가 TRUE 면 복구 알림(TXT_LINK_RETURN·NET_SUCC 메일) 생략. 목록은 2048 개, 뮤텍스 보호(타이머 스레드 Add / UDP 워커 Remove)
+- 변경: `struct_def.h` startup_silent_min, `ConfigLoad.h/.cpp` CFG_STARTUP_SILENT_MIN(기본 "26"), `SystemLoad.cpp` 로드, `cfg/onlic.ini.sample`, `docs/기능목록.md` N-01, `docs/리눅스참조구조.md` ini. EUC-KR+CRLF 유지
+- 보강(사용자 "26분 안전한가?"): 시간 창만으로는 재시작 직후 한 번 보내고 죽은 사이트도 무알림 처리됨 → 조건을 **창 안 AND `cc_update_time`==기동 초기화 시각**(재시작 후 수신 0회)으로 좁힘. `DbLic_SiteCountUpdateTime` 신규, `AlarmProc.cpp` s_szInitDate 보관. 창 길이와 무관하게 안전
+
+### ODBC 드라이버 확인 (추가) — 사용자 실측으로 정정
+- 43 서버 `odbcinst.ini` 는 PGDG `/usr/pgsql-15/lib/psqlodbc.so`(Unicode 빌드). isql 조회 결과의 깨진 패턴(`▒▒▒Ǿ▒▒׽▒Ʈ167`)을 바이트로 풀면 CP949 `BF C2 C7 C7 BE C6 …` 를 UTF-8 터미널이 그린 것 → **isql 이 받은 바이트가 이미 CP949**. 사용자가 수정 전 onlic 빌드로 "링크데이터가 수신되고 있지 않습니다" 알림톡을 한글 정상 수신한 것과 일치
+- 제가 "Unicode 드라이버라 ANSI(psqlodbca.so) 로 바꿔야 한다" 고 안내했던 것은 **오판** → 취소. 사용자가 추가했던 ANSI 항목 제거. 드라이버·DSN 은 기존 그대로, `CLIENT_ENCODING=UHC` 유지. `docs/DB스키마.md` §1.2·§1.3 정정
+
+### 결정 사항
+- **ipcs_log 는 중요 데이터 아님**(사용자 2026-10-14): 깨진 log_ip·8행 누락·lic_index 겹침은 운영에 무관, 정리하지 않음
+- ~~쓰레기 데이터 최소 정리~~ → **정리 안 함**(사용자 원복 요청). onlic 동작에 영향 없음(log_ip 는 INSERT 만, 참조 테이블은 미사용). 인코딩 문제는 `CLIENT_ENCODING=UHC` 로 대응
+- DB 생성(및 재생성 `dropdb`)은 항상 운영자가 postgres 계정으로 수동 수행. 스크립트는 생성·삭제 권한을 갖지 않음 (실수로 운영 DB 를 덮는 경로 차단)
+- 포트 39999·롤 `nasacti` 는 서버에 이미 있는 PG 인스턴스(onpia_check 와 같은 클러스터)를 그대로 쓰는 구성. 별도 PG 설치·`onlic` 롤 생성 계획 폐기
+- 인코딩은 UTF8 유지(클라이언트 EUCKR). CP949 확장 문자 변환 오류가 실제로 나면 EUC_KR DB 로 재생성(수동)
+
+### 다음 할 일
+- 서버·PC 타임스탬프 폴더 삭제(개인정보). 절체 직전 재추출·재복원 1회 더
+- **CLIENT_ENCODING=UHC 전환**(위 권고, 사용자 확인 후): ini 샘플·ConfigLoad 기본값·문서 4곳
+- ~~최종 검증 결함 수정~~ 완료(위). **서버 반영**: `Source/onlic` 전체(source/onlic, include/onlic, source/ShareLib 2개, cfg 샘플, test) scp → `make -f Makefile_64bit`(라이브러리 포함 전체 재빌드: nprintf/GetPrivateProfile 변경) → `cd test && make && ./framing_test` → `bin/onlic -l` 기동 → 시뮬레이터로 6321/5363/6770 확인
+- 확인결정사항 B12 정정(cc_nasupload_fail 은 YYYYMMDD 가 원본)
+- `odbc.ini` DSN `ipcs_log`(localhost:39999 nasa_license) / `onpia_check` 작성 → `cfg/onlic.ini` → `cd linux && make` 빌드 → `bin/onlic -l` 기동
+- `test/framing_test` 실행, 시뮬레이터로 6321/5363/6770 확인
+
+---
+
 ## [2026-10-13] 소스 완전 분석 + Linux 포팅 기준선 작성
 
 ### 작업 내용

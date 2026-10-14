@@ -54,12 +54,12 @@ int main(int argc, char *argv[])
         if (col.size() < 4) continue;
         const std::string &name = col[0];
         std::string got;
-        if (name == "udp_extract") {
+        if (name == "udp_extract" || name == "udp_none") {
             char payload[RESIDUAL_MAX+1] = "";
             std::string in = unhex(col[1]);
             char rdata[MAXLENGTH+1]; memset(rdata, 0, sizeof(rdata)); memcpy(rdata, in.data(), in.size() > MAXLENGTH ? MAXLENGTH : in.size());
             int n = Framing_UdpExtract(rdata, payload, sizeof(payload));
-            got = "0:" + hex(std::string(payload, n));
+            got = (n < 0) ? "none" : "0:" + hex(std::string(payload, n));
             std::string exp = col[2];
             if (got == exp) { pass++; printf("PASS %s\n", name.c_str()); } else { fail++; printf("FAIL %s\n  exp %s\n  got %s\n", name.c_str(), exp.c_str(), got.c_str()); }
             continue;

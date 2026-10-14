@@ -42,7 +42,7 @@ void	Framing_SearchSTX_ETX(const char *data, int &startPos, int &endPos);
 /* 원본 CutSocketSTX_ETX : 프레임을 잘라 콜백 호출 후 data 를 나머지로 갱신. 반환 = 자른 길이(STX~ETX), 없으면 0 */
 int		Framing_CutSTX_ETX(char *data, int startPos, int endPos, FRAME_CALLBACK cb, void *pCtx);
 
-/* UDP 1 datagram (원본 ReadUdpMsgProc): 첫 프레임 payload 만 추출. 반환 payload 길이, 프레임 없으면 0 */
+/* UDP 1 datagram (원본 ReadUdpMsgProc): 첫 프레임 payload 만 추출. 반환 payload 길이(빈 프레임 0), 프레임 없으면 -1 */
 int		Framing_UdpExtract(const char *szRdata, char *szPayload, int nPayloadSize);
 
 /* 원본 StrSplit : cmp 로 분할. 경계 검사 추가 (원본은 50/1024 초과 시 오버플로) */

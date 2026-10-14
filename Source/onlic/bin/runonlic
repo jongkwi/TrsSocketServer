@@ -1,0 +1,4 @@
+#!/bin/sh
+# runonlic - same role as onmw runmw. run from bin/. daemon start (config ../cfg/onlic.ini)
+cd "$(dirname "$0")"
+./onlic -d -c ../cfg/onlic.ini

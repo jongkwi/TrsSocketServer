@@ -40,9 +40,11 @@ void LicSocketProc(CRecvWait *pWait, SOCK_RECV_WAIT *pItem)
 		/* :719 lic_access_list. 실패(-1) 도 Close (결정 B2 현행 유지) */
 		nCnt = DbLic_AccessCount(pWait->m_pLicDB, pItem->remote_ip);
 
+		/* fd 사본으로 직접 send 하지 않는다: 세션이 닫힌 뒤 같은 fd 가 재사용될 수 있음 → (handle, sock_seq) 일치 확인 후 송신 */
 		if(pItem->handle > 0){
-			if(nCnt <= 0) nRet = (int)send(pItem->handle, LIC_RESP_CLOSE, 5, MSG_NOSIGNAL);
-			else nRet = (int)send(pItem->handle, LIC_RESP_RUN, 3, MSG_NOSIGNAL);
+			if(nCnt <= 0) nRet = Lic_SendResponse(pItem->sock_seq, pItem->handle, LIC_RESP_CLOSE, 5);
+			else nRet = Lic_SendResponse(pItem->sock_seq, pItem->handle, LIC_RESP_RUN, 3);
+			if(nRet == -2) OnlicLogf(LOG_TCP, "LIC session gone before response rip:%s handle:%d seq:%d", pItem->remote_ip, pItem->handle, pItem->sock_seq);
 		}
 		OnlicLogf(LOG_TCP, "LIC %s rip:%s type:%s mac:%s ip:%s cnt:%ld send:%d elapsed:%lldms",
 			(nCnt <= 0) ? LIC_RESP_CLOSE : LIC_RESP_RUN, pItem->remote_ip, strType, strMac, strIP, nCnt, nRet, (long long)(GetMilliSencondProc() - t0));

@@ -1,6 +1,10 @@
 
 #include "ShareLib.h"
 
+/* onlic (2026-10-14): differs from onmw - vsnprintf bounded to the caller buffer instead of unbounded vsprintf.
+   Callers pass (sizeof(buf)-1) as size, so the real buffer is size+1 bytes (= size+2 after --size below).
+   onmw checked the length only after writing (silent stack/heap overflow; err_quit prints but does not exit). */
+
 int nprintf(char *buf, size_t size, const char *fmt, ...)
 {
 	CError		err;
@@ -9,7 +13,7 @@ int nprintf(char *buf, size_t size, const char *fmt, ...)
 
 	--size;
 	va_start(ap, fmt);
-	vsprintf_st(buf, fmt, ap);	/* Sigh, some vsprintf's return ptr, not length */
+	vsnprintf(buf, size + 2, fmt, ap);	/* bounded: truncates instead of overflowing */
 	n = strlen_st(buf);
 	va_end(ap);
 	if (n > (signed)size)

@@ -7,12 +7,37 @@
 #include <syslog.h>
 #include <getopt.h>
 #include <fcntl.h>
+#include <signal.h>
+#include <sys/resource.h>
 #ifdef _CURL
 #include <curl/curl.h>
 #endif
 
 static void	quit_func(int);
 static void pipe_func(int);
+
+/* 시그널 핸들러는 플래그만 설정 (async-signal-safe). 로그·syslog 는 메인 루프에서 (L4, 2026-10-14) */
+static volatile sig_atomic_t g_sig_quit = 0;
+static volatile sig_atomic_t g_sig_pipe = 0;
+
+/* fd 상한을 hard limit 까지 올린다 (세션 누적 대비). 결과는 StartSystem 뒤 로그 */
+static void RaiseFdLimit(long *pSoft, long *pHard)
+{
+	struct rlimit rl;
+	*pSoft = *pHard = -1;
+	if(getrlimit(RLIMIT_NOFILE, &rl) != 0) return;
+	if(rl.rlim_cur < rl.rlim_max){ rl.rlim_cur = rl.rlim_max; setrlimit(RLIMIT_NOFILE, &rl); }
+	if(getrlimit(RLIMIT_NOFILE, &rl) == 0){ *pSoft = (long)rl.rlim_cur; *pHard = (long)rl.rlim_max; }
+}
+
+/* 데몬: 기동 메시지까지 터미널에 보여 준 뒤 0/1/2 를 /dev/null 로 (파이프로 출력을 잡는 래퍼가 멈추지 않게, L11) */
+static void DetachStdio()
+{
+	int fd = open("/dev/null", O_RDWR);
+	if(fd < 0) return;
+	dup2(fd, 0); dup2(fd, 1); dup2(fd, 2);
+	if(fd > 2) close(fd);
+}
 
 /////////////////////////////////////////////////////////////////////////////
 //	main
@@ -21,6 +46,7 @@ int main(int argc, char *argv[])
 {
 	char cpath[256] = "", szDefine[501] = "";
 	int  rcode, isExit = FALSE, nRet = FALSE;
+	long lFdSoft = -1, lFdHard = -1;
 
 	GetCompileDefineString(szDefine);
 	strcpy_st(cpath, DEFAULT_CONFIG_FILE);
@@ -74,33 +100,48 @@ int main(int argc, char *argv[])
 
 	OnlicIntro();
 
+	/* PID 파일: -p 옵션 > ini [PATH_CONF] PID_FILE > 기본값. 중복 실행 검사는 StartSystem 보다 먼저
+	** (2번째 인스턴스가 DbLic_UpdateTimeAll 로 전 사이트 cc_update_time 을 초기화하는 것을 막는다, L6) */
+	if(strlen_st(m_gPidFile) <= 0){
+		GetPrivateProfileStringUsr((char*)"PATH_CONF", (char*)"PID_FILE", PID_FILE, m_gPidFile, sizeof(m_gPidFile)-1, cpath);
+		if(strlen_st(m_gPidFile) <= 0) strcpy_st(m_gPidFile, PID_FILE);
+	}
+	if(is_check_process(onlic_pid, argv[0]) == TRUE){
+		printf("onlic already running (pid file %s)\n", m_gPidFile);
+		return 1;
+	}
+
+	RaiseFdLimit(&lFdSoft, &lFdHard);
+#ifdef _CURL
+	curl_global_init(CURL_GLOBAL_DEFAULT);		/* HTTP 워커 스레드(StartSystem 7단계) 보다 먼저 (L10) */
+#endif
+
 	onlic_start = TRUE;
 	nRet = sys_load.StartSystem(cpath);
 	if(nRet != SYSTEMLOAD_SUCCESS){
-		onlic_start = FALSE;
-		WaitSleep(1);
-		return FALSE;
-	}
-
-	/* PID 파일은 설정 로드 후 (ini 의 PID_FILE 반영). 이미 실행 중이면 종료 */
-	if(strlen_st(m_gPidFile) <= 0) strcpy_st(m_gPidFile, PID_FILE);
-	if(is_check_process(onlic_pid, argv[0]) == TRUE){
-		printf("onlic already running (pid file %s)\n", m_gPidFile);
-		onlic_start = FALSE;
-		return FALSE;
-	}
-
+		printf("onlic start failed (code:%d) - see run log\n", nRet);
+		StopOnlicSystem();						/* 이미 기동된 타이머/워커 정리 후 종료 (L7) */
 #ifdef _CURL
-	curl_global_init(CURL_GLOBAL_DEFAULT);
+		curl_global_cleanup();
 #endif
+		return 1;
+	}
+	OnlicLogf(LOG_SOFT, "RLIMIT_NOFILE soft:%ld hard:%ld", lFdSoft, lFdHard);
+
 	RunOnlicSystem();
-	printf("onlic Server Start!! (%s)\n", (daemon_proc == 1) ? "daemon" : "foreground");
+	printf("License/Alarm Relay Server Start!! (%s)\n", (daemon_proc == 1) ? "daemon" : "foreground");
 	fflush(stdout);
+	if(daemon_proc == 1) DetachStdio();
 
 	while(TRUE){
 		WaitSleep(1);
+		if(g_sig_pipe > 0){ OnlicLogf(LOG_SOFT, "SIGPIPE ignored (count:%d)", (int)g_sig_pipe); g_sig_pipe = 0; }
 		if(onlic_start == FALSE) break;
 		if(daemon_start == FALSE) break;
+	}
+	if(g_sig_quit != 0){
+		syslog(LOG_NOTICE, "onlic : kill signo:%d", (int)g_sig_quit);
+		OnlicLogf(LOG_SOFT, "onlic : kill signo:%d", (int)g_sig_quit);
 	}
 
 	StopOnlicSystem();
@@ -111,12 +152,26 @@ int main(int argc, char *argv[])
 	return 0;
 }
 
+/*
+**	기동 배너 (onmw NcmwIntro 와 같은 형식)
+*/
 void OnlicIntro()
 {
-	char szDefine[501] = "";
+	char szDefine[501] = "", szVersion[101] = "", szBase[101] = "";
 	GetCompileDefineString(szDefine);
-	printf("ONPIA License/Alarm Relay Server (onlic) %s / %s [%s]\n", ONLIC_VERSION, ONLIC_LAST_UPDATE, szDefine);
-	printf("Copyright 2001, ONPIA Corporation. Linux port of %s\n", ONLIC_WIN_BASE_VERSION);
+	nprintf(szVersion, 100, "%s / %s", ONLIC_VERSION, ONLIC_LAST_UPDATE);
+	nprintf(szBase, 100, "Linux port of %s", ONLIC_WIN_BASE_VERSION);
+	printf("\n\n*************************************************************\n");
+	printf("*                                                           *\n");
+	printf("*           %-48s*\n", "ONPIA License/Alarm Relay Server (onlic)");
+	printf("*                                                           *\n");
+	printf("*           Release Version %-32s*\n", szVersion);
+	printf("*           %-48s*\n", szDefine);
+	printf("*           %-48s*\n", szBase);
+	printf("*                                                           *\n");
+	printf("*           %-48s*\n", "Copyright 2001, ONPIA Corporation");
+	printf("*                                                           *\n");
+	printf("*************************************************************\n");
 	fflush(stdout);
 }
 
@@ -141,21 +196,29 @@ int RunOnlicSystem()
 /*
 **	종료: 타이머 → 소켓 스레드 종료 대기 → 워커 → 로그
 */
+/* 스레드가 자기 pid 변수를 0 으로 만들 때까지 기다린 뒤 join (L5). 반환 TRUE = 정상 종료 */
+static int JoinThreadVar(pthread_t *pVar, int nMaxMs, const char *szName)
+{
+	pthread_t tid = *pVar;
+	int i = 0;
+	if(tid == 0) return TRUE;
+	for(i = 0; i < nMaxMs / 100; i++){ if(*pVar == 0) break; WaitMSleep(100); }
+	if(*pVar != 0){ printf("%s thread did not exit in %dms\n", szName, nMaxMs); return FALSE; }
+	pthread_join(tid, NULL);
+	return TRUE;
+}
+
 int StopOnlicSystem()
 {
-	int i = 0;
-
 	if(onlic_start == FALSE && lic_log_object == NULL) return FALSE;
 	onlic_start = FALSE;
 
 	if(licTm != NULL){ licTm->EndUserTimer(); delete licTm; licTm = NULL; }
 
-	for(i = 0; i < 10; i++){ if(lic_pid <= 0) break; WaitMSleep(i*100); }
-	for(i = 0; i < 10; i++){ if(alarm_pid <= 0) break; WaitMSleep(i*100); }
-	for(i = 0; i < 10; i++){ if(udp_pid <= 0) break; WaitMSleep(i*100); }
-	if(lic_pid > 0){ printf("Lic Socket Thread Force Kill!!\n"); Pthread_kill(&lic_pid, SIGINT); }
-	if(alarm_pid > 0){ printf("Alarm Socket Thread Force Kill!!\n"); Pthread_kill(&alarm_pid, SIGINT); }
-	if(udp_pid > 0){ printf("Udp Socket Thread Force Kill!!\n"); Pthread_kill(&udp_pid, SIGINT); }
+	/* 소켓 스레드: poll 타임아웃 1초 → 5초 안에 종료. SIGINT 로 죽이는 방식(Pthread_kill) 은 스레드를 종료시키지 못하므로 제거 */
+	JoinThreadVar(&lic_pid, 5000, "Lic Socket");
+	JoinThreadVar(&alarm_pid, 5000, "Alarm Socket");
+	JoinThreadVar(&udp_pid, 5000, "Udp Socket");
 
 	if(sys_conf.role_license == TRUE) LicRecvWaitStackKill();
 	if(sys_conf.role_alarm == TRUE){ EventRecvWaitStackKill(); HttpWaitStackKill(); }
@@ -248,17 +311,16 @@ void GetCompileDefineString(char* szDef)
 #endif
 }
 
+/* 핸들러 안에서 로그 뮤텍스를 잡으면 로그 스레드에 시그널이 왔을 때 자기 교착 → 플래그만 설정 (L4) */
 static void quit_func(int signo)
 {
-	char buf[64] = "";
-	nprintf(buf, 63, "onlic : kill signo:%d", signo);
-	syslog(LOG_NOTICE, "%s", buf);
-	OnlicLog(LOG_SOFT, buf);
+	g_sig_quit = signo;
 	onlic_start = FALSE;
 }
 
 static void pipe_func(int signo)
 {
-	/* 상대가 끊은 소켓에 send 한 경우. 프로세스 종료 방지만 하고 로그 */
-	OnlicLogf(LOG_SOFT, "SIGPIPE ignored signo:%d", signo);
+	/* 상대가 끊은 소켓에 send 한 경우 (send 는 모두 MSG_NOSIGNAL 이라 실제로는 거의 없음). 메인 루프가 횟수를 로그 */
+	(void)signo;
+	g_sig_pipe++;
 }

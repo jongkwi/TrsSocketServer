@@ -110,9 +110,10 @@ CASES = [
     ("etx_missing_small",   [STX + b"IVR" + SEP + b"partial"]),          # 잔여 보관
     ("etx_missing_large",   [STX + b"X" * 498]),                         # 잔여 499 → 보관(<500)
     ("etx_missing_500",     [STX + b"X" * 499, b"Y" * 10]),              # 1차 500B → 폐기, 2차는 Y 만 남음
-    ("residual_overflow",   [STX + b"A" * 400, STX + b"B" * 400, b"C" * 250 + ETX]), # 400+401<1000 → 합침, 이후 801+251>1000 → 잔여 폐기
+    ("residual_overflow",   [STX + b"A" * 400, STX + b"B" * 400, b"C" * 250 + ETX]), # 1차 잔여 401(<500 보관), 2차 401+401=802<1000 → 합침, ETX 없어 마지막 STX 부터 401 만 잔여(<500 보관), 3차 401+251 → 프레임 1개 payload B*400+C*250
     ("three_frames_split",  [LIC + VRS[:5], VRS[5:] + HB]),
-    ("frame_at_500_boundary",[(STX + b"Z" * 497 + ETX)[:500], (STX + b"Z" * 497 + ETX)[500:]]),  # 정확히 500 바이트 프레임 분할
+    ("frame_split_near_500",[(STX + b"Z" * 497 + ETX)[:498], (STX + b"Z" * 497 + ETX)[498:]]),  # 499B 프레임을 498+1 로 분할: 잔여 498(<500) 보관 → ETX 로 완성
+    ("frame_over_500_lost", [(STX + b"Z" * 499 + ETX)[:500], (STX + b"Z" * 499 + ETX)[500:]]),  # 501B 프레임: 1차 500B 잔여는 ETX 없이 500 이상 → 폐기(Windows 규칙), ETX 만 남아 프레임 없음
     ("empty_frame",         [STX + ETX]),
     ("only_etx",            [b"abc" + ETX + LIC]),
 ]
@@ -138,6 +139,10 @@ def run():
     u = udp_extract(UDP)
     lines.append("udp_extract|%s|0:%s|" % (UDP.hex(), u.hex()))
     print("[udp_extract] payload=%r" % u)
+    UDP_NONE = ETX + b"abc" + STX                                         # ETX 가 STX 보다 앞 → 프레임 없음 (C 는 -1)
+    u2 = udp_extract(UDP_NONE)
+    lines.append("udp_none|%s|%s|" % (UDP_NONE.hex(), "none" if u2 is None else "0:" + u2.hex()))
+    print("[udp_none] payload=%r" % u2)
     kr = "온피아-192.168.0.1에서 onwatch 프로세스 장애가 발생 했습니다. 추가문구추가문구추가문구".encode("cp949")
     cut = hangul_strcut(kr, 80)
     lines.append("hangul_cut_80|%s|0:%s|" % (kr.hex(), cut.hex()))

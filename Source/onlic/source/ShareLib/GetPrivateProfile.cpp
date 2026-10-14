@@ -18,6 +18,10 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 #include "ShareLib.h"
 
+/* onlic (2026-10-14): differs from onmw - values/defaults are passed to nprintf via "%s", never as the format string.
+   onmw passed the raw ini value as the format: a value containing %s/%d ([ALARM_MSG] texts, passwords, URLs)
+   made vsprintf read nonexistent varargs (garbage or SIGSEGV). */
+
 long GetPrivateProfileStringUsr(char* lpAppName,char* lpKeyName, const char* lpDefault,char* lpReturnedString,long nSize,char* lpFileName)
 {
 
@@ -31,7 +35,7 @@ long GetPrivateProfileStringUsr(char* lpAppName,char* lpKeyName, const char* lpD
 	char *c1,*c2;
 	*lpReturnedString=0;
 
-	nprintf(lpReturnedString,nSize,lpDefault);
+	nprintf(lpReturnedString,nSize,"%s",lpDefault);
 	
 	fp=fopen(lpFileName,"r");
 	if (!fp) return 0;
@@ -64,7 +68,7 @@ long GetPrivateProfileStringUsr(char* lpAppName,char* lpKeyName, const char* lpD
 						while ((*c1==' ')||(*c1=='\t')||(*c1=='\n')||(*c1=='\r')) c1--;
 						*(c1+1)=0;
 						// copy value and return
-						nprintf(lpReturnedString,nSize,c2);
+						nprintf(lpReturnedString,nSize,"%s",c2);
 						break;
 					}
 				}

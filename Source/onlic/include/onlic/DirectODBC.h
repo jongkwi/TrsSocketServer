@@ -36,8 +36,10 @@ public:
 	void	CloseTable();
 
 	/* 실행 */
-	int		ExecSql(const char *sqlCmd);			/* 실패 시 재접속 후 1회 재실행 (m_nExecRetry) */
+	int		ExecSql(const char *sqlCmd);			/* 연결 끊김(m_nConn=FALSE)일 때만 재접속 후 1회 재실행 (m_nExecRetry) */
 	int		ExecLastSql(const char *sqlCmd);
+	long	ExecSqlRows(const char *sqlCmd);		/* ExecSql + SQLRowCount. 반환 영향 행 수, 실패 -1 */
+	long	ExecLastSqlRows(const char *sqlCmd);
 
 	/* 단일 값 */
 	long	RowCount(const char *sqlCmd);			/* 첫 컬럼 정수. 실패 -1 (Windows RowCount 와 동일) */
@@ -61,6 +63,8 @@ protected:
 	char		m_szDSN[51], m_szUID[51], m_szPWD[51], m_szName[31];
 	char		m_szClientEncoding[31];
 	long		m_lStatementTimeout;				/* 초 */
+	long		m_lLoginTimeout;					/* 초 (DATABASEINFO.lLoginTimeout, 0 이면 DB_LOGIN_TIMEOUT_SEC) */
+	int			m_nDbType;							/* DB_TYPE_PG / DB_TYPE_MSSQL */
 };
 
 #endif /* DirectODBC.h */

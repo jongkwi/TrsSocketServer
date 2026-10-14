@@ -38,6 +38,7 @@ cd bin
 ./onlic -d                  # 데몬. 설정 ../cfg/onlic.ini
 ```
 역할은 `cfg/onlic.ini` `[ROLE]`로 분리: A(`lic`) 서버 `ALARM=0 LINK_CHECK=0`, B(`lic2`) 서버 모두 1.
+권장 설정: `[DATABASE_INFO] CLIENT_ENCODING=UHC`(PG 의 EUC_KR 은 CP949 확장 한글 불가), `[PROTOCOL] LIC_IDLE_TIMEOUT_SEC=30`(응답 후 안 끊는 스캐너 세션 정리). 소켓 루프는 `poll()`(fd 1024 제한 없음).
 
 ## 호환 계약
 포트·프레임·응답 규칙은 `docs/프로토콜명세.md`가 기준. 변경 금지 항목은 `docs/리눅스참조구조.md` §6.

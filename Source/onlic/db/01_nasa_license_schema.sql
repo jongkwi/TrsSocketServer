@@ -9,8 +9,9 @@
 --    - smalldatetime → timestamp(0), datetime → timestamp, getdate()/sysdatetime() → now()
 --    - PK/FK/인덱스는 원본 그대로 + onlic 권고 인덱스(끝부분)
 --    - 재실행 가능: CREATE TABLE/INDEX IF NOT EXISTS, FK 는 존재 검사 후 추가 (기존 테이블·데이터는 건드리지 않음)
---  적용:  createdb -E UTF8 --locale=C nasa_license   (서버 인코딩 UTF8, 클라이언트는 EUCKR 로 접속: onlic set client_encoding)
---         psql -d nasa_license -f 01_nasa_license_schema.sql
+--  적용:  DB 는 수동 생성(postgres 계정):  createdb -p 39999 -O nasacti -E UTF8 nasa_license
+--         (서버 인코딩 UTF8, 클라이언트는 EUCKR 로 접속: onlic 이 set client_encoding. 이 파일은 DB 를 만들지 않음)
+--         psql -h 127.0.0.1 -p 39999 -U nasacti -d nasa_license -f 01_nasa_license_schema.sql
 -- =====================================================================
 
 -- CALLBOX_LOG  (원본 190.44, 두 서버 공통)

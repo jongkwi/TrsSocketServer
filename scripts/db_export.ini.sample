@@ -7,9 +7,12 @@ bcp    = C:/Program Files/Microsoft SQL Server/100/Tools/Binn/bcp.exe
 [output]
 ; 출력 루트 (ini 위치 기준). 실행마다 YYYYMMDD_HHMMSS 하위 폴더 생성 -> scripts/YYYYMMDD_HHMMSS/
 dir = .
-; 스키마 파일(00/01) 위치 - 추출 폴더에 복사됨. apply.sh 의 기본 접속 계정/DB
+; 스키마 파일(01) 위치 - 추출 폴더에 복사됨. apply.sh 의 기본 접속 (환경변수 PGHOST/PGPORT/PGUSER/PGDATABASE 로 덮어쓸 수 있음)
+; DB 자체는 스크립트가 만들지 않음 - 서버에서 postgres 계정으로 수동 생성:  createdb -p 39999 -O nasacti -E UTF8 nasa_license
 schema_dir = ../Source/onlic/db
-pg_user = onlic
+pg_host = 127.0.0.1
+pg_port = 39999
+pg_user = nasacti
 pg_db = nasa_license
 ; 알람 테이블 소스 이름 (apply.sh A 모드에서 생략할 파일 판별)
 alarm_sources = 7

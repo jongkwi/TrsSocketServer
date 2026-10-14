@@ -1,5 +1,6 @@
 ; onlic.ini.sample - copy to onlic.ini and fill in. onlic.ini is NOT committed (DB credentials).
 ; Encoding: CP949 (alarm texts in [ALARM_MSG] are CP949 bytes). Read with GetPrivateProfileStringUsr.
+; Parser notes: a value ends at the first ';' on the line (values cannot contain ';'); trailing blanks are trimmed.
 
 [IP_CONF]
 MY_IP=                       ; empty = INADDR_ANY (same as Windows build)
@@ -28,7 +29,8 @@ SMS_DSN=onpia_sms
 SMS_ID=
 SMS_PW=
 STATEMENT_TIMEOUT=10
-CLIENT_ENCODING=EUCKR
+CLIENT_ENCODING=UHC           ; UHC = Windows CP949. Do not use EUCKR: PostgreSQL EUC_KR lacks the 8,822 CP949 extension hangul
+SMS_DB_TYPE=1                 ; 0 = PostgreSQL, 1 = MSSQL (FreeTDS). PG session settings are sent only for 0
 
 [LINK_CHECK]
 CHECK_PERIOD_SEC=5
@@ -36,6 +38,7 @@ ERROR_AFTER_MIN=21
 NEW_SITE_SKIP_HOUR=3
 NAS_FAIL_NOTIFY_MAX=10
 NAS_FAIL_COUNT_MAX=999
+STARTUP_SILENT_MIN=26        ; new: within N min after start, a site that has NOT sent any LINK_CHECK since start (cc_update_time still = init value) is set to cc_link_error=Y silently; its later recovery is silent too. Sites that sent at least once after start are alarmed normally. 0 = off. default = ERROR_AFTER_MIN + agent period 5
 
 [ATALK]
 USE=1

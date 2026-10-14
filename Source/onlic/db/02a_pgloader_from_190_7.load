@@ -3,7 +3,7 @@
 -- 비밀번호는 환경변수 또는 ~/.pgpass / 직접 기입 (이 파일은 git 커밋 금지)
 LOAD DATABASE
      FROM mssql://lic:PASSWORD@203.239.190.7:1433/NASA_License
-     INTO postgresql://onlic:PASSWORD@127.0.0.1:5432/nasa_license
+     INTO postgresql://nasacti:PASSWORD@127.0.0.1:39999/nasa_license
 
  WITH data only, truncate, batch rows = 5000
  SET work_mem to '64MB', maintenance_work_mem to '256MB'

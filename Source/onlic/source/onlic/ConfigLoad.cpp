@@ -82,13 +82,15 @@ int CConfigLoad::GetConfigProc(int nCfgType, char *szData)
 	  case CFG_SMS_ID:				return (GetPrivateProfileStringLW("DATABASE_INFO", "SMS_ID", "", szData, 50) > 0);
 	  case CFG_SMS_PW:				return (GetPrivateProfileStringLW("DATABASE_INFO", "SMS_PW", "", szData, 50, TRUE) > 0);
 	  case CFG_STATEMENT_TIMEOUT:	return (GetPrivateProfileStringLW("DATABASE_INFO", "STATEMENT_TIMEOUT", "10", szData, 10) > 0);
-	  case CFG_CLIENT_ENCODING:		return (GetPrivateProfileStringLW("DATABASE_INFO", "CLIENT_ENCODING", "EUCKR", szData, 30) > 0);
+	  case CFG_CLIENT_ENCODING:		return (GetPrivateProfileStringLW("DATABASE_INFO", "CLIENT_ENCODING", "UHC", szData, 30) > 0);	/* UHC = CP949. EUC_KR 은 확장 한글 불가 (B2) */
+	  case CFG_SMS_DB_TYPE:			return (GetPrivateProfileStringLW("DATABASE_INFO", "SMS_DB_TYPE", "1", szData, 10) > 0);		/* 0=PostgreSQL 1=MSSQL(FreeTDS). PG 세션 설정 전송 여부 (B9) */
 	  /* [LINK_CHECK] (TrsSocketServer.cpp OnCheckLinkData 상수) */
 	  case CFG_LINK_CHECK_PERIOD_SEC:	return (GetPrivateProfileStringLW("LINK_CHECK", "CHECK_PERIOD_SEC", "5", szData, 10) > 0);
 	  case CFG_LINK_ERROR_AFTER_MIN:	return (GetPrivateProfileStringLW("LINK_CHECK", "ERROR_AFTER_MIN", "21", szData, 10) > 0);
 	  case CFG_NEW_SITE_SKIP_HOUR:		return (GetPrivateProfileStringLW("LINK_CHECK", "NEW_SITE_SKIP_HOUR", "3", szData, 10) > 0);
 	  case CFG_NAS_FAIL_NOTIFY_MAX:		return (GetPrivateProfileStringLW("LINK_CHECK", "NAS_FAIL_NOTIFY_MAX", "10", szData, 10) > 0);
 	  case CFG_NAS_FAIL_COUNT_MAX:		return (GetPrivateProfileStringLW("LINK_CHECK", "NAS_FAIL_COUNT_MAX", "999", szData, 10) > 0);
+	  case CFG_STARTUP_SILENT_MIN:		return (GetPrivateProfileStringLW("LINK_CHECK", "STARTUP_SILENT_MIN", "26", szData, 10) > 0);
 	  /* [ATALK] (TrsSocketServer.cpp:874 INSERT 고정값) */
 	  case CFG_ATALK_USE:			return (GetPrivateProfileStringLW("ATALK", "USE", "1", szData, 10) > 0);
 	  case CFG_ATALK_SENDER_KEY:	return (GetPrivateProfileStringLW("ATALK", "SENDER_KEY", "", szData, 100, TRUE) > 0);

@@ -9,8 +9,7 @@
 
 /* 시각 문자열 (Windows sprintf 포맷 그대로) */
 void	DbLic_Now14(char *szOut);						/* YYYYMMDDHHMMSS (cc_update_time, NOW_DATE) */
-void	DbLic_Today8(char *szOut);						/* YYYYMMDD (cc_pause 비교) */
-void	DbLic_TodayHyphen(char *szOut);					/* YYYY-MM-DD (cc_nasupload_fail, 결정 B12 소스 형식 유지) */
+void	DbLic_Today8(char *szOut);						/* YYYYMMDD (cc_pause·cc_nasupload_fail 비교. 원본 :812 동일) */
 void	DbLic_AgoMinute14(int nAgoMinute, char *szOut);	/* now - n분 → YYYYMMDDHHMMSS (GetAgoTimeProc) */
 
 /* ---- 6321 라이선스 (TrsSocketServer.cpp:714-719) ---- */
@@ -24,9 +23,10 @@ long	DbLic_SiteCountLinkError(CDirectODBC *pDB, const char *szIP, const char *sz
 int		DbLic_SiteInsertNew(CDirectODBC *pDB, const char *szIP, const char *szRealIP);				/* :857 'new_site','신규1' */
 int		DbLic_IsNewSiteExpired(CDirectODBC *pDB, const char *szIP, const char *szRealIP, int nHour);	/* :903 DATEDIFF → PG */
 int		DbLic_UpdateTimeAll(CDirectODBC *pDB, const char *szDate14);								/* :255 cc_use='Y' */
+long	DbLic_SiteCountUpdateTime(CDirectODBC *pDB, const char *szIP, const char *szRealIP, const char *szDate14);	/* 신규: cc_update_time 이 주어진 값 그대로인 사이트 수 */
 int		DbLic_UpdateTimeNotError(CDirectODBC *pDB, const char *szDate14);							/* :1441 link_error='N' */
 int		DbLic_UpdateTimeSite(CDirectODBC *pDB, const char *szDate14, const char *szIP, const char *szRealIP);	/* :1026 + link_error='N' */
-int		DbLic_SetLinkError(CDirectODBC *pDB, const char *szIP, const char *szRealIP);				/* :1523 cc_link_error='Y' */
+long	DbLic_SetLinkError(CDirectODBC *pDB, const char *szIP, const char *szRealIP, const char *szLocalDay14);	/* :1523 cc_link_error='Y' (+cc_update_time<=기준). 반환 갱신 행 수, -1 오류 */
 long	DbLic_LinkErrorCount(CDirectODBC *pDB, const char *szLocalDay14);							/* :1447 */
 int		DbLic_GetLinkErrorSites(CDirectODBC *pDB, const char *szLocalDay14, CC_LINKINFO **ppList);	/* :1457, 반환 건수 */
 int		DbLic_GetNasFailCnt(CDirectODBC *pDB, const char *szIP, const char *szRealIP);				/* :1036 실패 -1 */

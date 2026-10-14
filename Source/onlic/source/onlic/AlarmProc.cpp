@@ -58,23 +58,27 @@ static void AlarmText_Unescape(char *s)
 	s[j] = 0;
 }
 
-/* %s/%d 개수가 기본값과 다르면 사용하지 않음 (포맷 문자열 안전) */
-static int AlarmText_CountFmt(const char *s)
+/* 변환 지정자 순서(%s/%d ...)가 기본값과 다르면 사용하지 않음 (포맷 문자열 안전). szSpec = 지정자 문자 나열, 예 "ssd" */
+static void AlarmText_FmtSpec(const char *s, char *szSpec, int nSpecSize)
 {
 	int n = 0, i = 0;
+	szSpec[0] = 0;
 	for(i = 0; s[i] != 0; i++){
 		if(s[i] == '%'){
 			if(s[i+1] == '%'){ i++; continue; }
-			n++;
+			i++;
+			while(s[i] != 0 && strchr("-+ #0123456789.lh", s[i]) != NULL) i++;	/* 플래그·폭·길이 수식자 건너뜀 */
+			if(s[i] == 0) break;
+			if(n < nSpecSize - 1) szSpec[n++] = s[i];
 		}
 	}
-	return n;
+	szSpec[n] = 0;
 }
 
 int AlarmProc_Init()
 {
 	int i = 0;
-	char szVal[512] = "";
+	char szVal[512] = "", szSpec1[32] = "", szSpec2[32] = "";
 	for(i = 0; i < TXT_MAX; i++){
 		strcpy_st(s_txt[i], s_txt_def[i].def);
 		if(strlen_st(sys_load.m_szConfig) > 0){
@@ -82,11 +86,13 @@ int AlarmProc_Init()
 			GetPrivateProfileStringUsr((char*)"ALARM_MSG", (char*)s_txt_def[i].key, "", szVal, sizeof(szVal)-1, (char*)sys_load.m_szConfig);
 			if(strlen_st(szVal) > 0){
 				AlarmText_Unescape(szVal);
-				if(AlarmText_CountFmt(szVal) == AlarmText_CountFmt(s_txt_def[i].def)){
+				AlarmText_FmtSpec(szVal, szSpec1, sizeof(szSpec1));
+				AlarmText_FmtSpec(s_txt_def[i].def, szSpec2, sizeof(szSpec2));
+				if(strcmp(szSpec1, szSpec2) == 0){
 					strcpy_st(s_txt[i], szVal);
 					OnlicLogf(LOG_SOFT, "[ALARM_MSG] %s = %s", s_txt_def[i].key, szVal);
 				}else{
-					OnlicLogf(LOG_SOFT, "[ALARM_MSG] %s ignored (format count mismatch)", s_txt_def[i].key);
+					OnlicLogf(LOG_SOFT, "[ALARM_MSG] %s ignored (format spec mismatch: '%s' != '%s')", s_txt_def[i].key, szSpec1, szSpec2);
 				}
 			}
 		}
@@ -99,6 +105,47 @@ const char* AlarmText(int nIdx)
 {
 	if(nIdx < 0 || nIdx >= TXT_MAX) return "";
 	return (s_txt_loaded == TRUE) ? s_txt[nIdx] : s_txt_def[nIdx].def;
+}
+
+/* ---------------- 재시작 직후 조용히 장애 처리한 사이트 목록 (신규 2026-10-14) ----------------
+**	기동 후 STARTUP_SILENT_MIN 안에 링크 장애로 판정된 사이트는 재시작 전부터 죽어 있던 곳이므로 알림 없이 cc_link_error=Y 만 기록한다.
+**	그 사이트가 나중에 LINK_CHECK 를 보내면 복구 알림도 내지 않는다 (알린 적 없는 장애의 복구). 타이머 스레드가 Add, UDP 워커가 Remove */
+#define SILENT_SITE_MAX		2048
+typedef struct { char ip[51]; char rip[51]; } SILENT_SITE;
+static SILENT_SITE		s_silent[SILENT_SITE_MAX];
+static int				s_silent_cnt = 0;
+static pthread_mutex_t	s_silent_mutex = PTHREAD_MUTEX_INITIALIZER;
+
+static void SilentSite_Add(const char *szIP, const char *szRealIP)
+{
+	int i = 0;
+	Pthread_mutex_lock(&s_silent_mutex);
+	for(i = 0; i < s_silent_cnt; i++){
+		if(strcmp(s_silent[i].ip, szIP) == 0 && strcmp(s_silent[i].rip, szRealIP) == 0) break;
+	}
+	if(i >= s_silent_cnt && s_silent_cnt < SILENT_SITE_MAX){
+		strncpy_st(s_silent[s_silent_cnt].ip, szIP, 50);
+		strncpy_st(s_silent[s_silent_cnt].rip, szRealIP, 50);
+		s_silent_cnt++;
+	}
+	Pthread_mutex_unlock(&s_silent_mutex);
+}
+
+/* 목록에 있으면 제거하고 TRUE */
+static int SilentSite_Remove(const char *szIP, const char *szRealIP)
+{
+	int i = 0, nFound = FALSE;
+	Pthread_mutex_lock(&s_silent_mutex);
+	for(i = 0; i < s_silent_cnt; i++){
+		if(strcmp(s_silent[i].ip, szIP) == 0 && strcmp(s_silent[i].rip, szRealIP) == 0){
+			if(i < s_silent_cnt - 1) s_silent[i] = s_silent[s_silent_cnt - 1];
+			s_silent_cnt--;
+			nFound = TRUE;
+			break;
+		}
+	}
+	Pthread_mutex_unlock(&s_silent_mutex);
+	return nFound;
 }
 
 /* ---------------- 보조 (Windows 동명) ---------------- */
@@ -269,7 +316,7 @@ void EventUdpProc(CRecvWait *pWait, SOCK_RECV_WAIT *pItem)
 	if(pWait == NULL || pItem == NULL) return;
 	pDB = pWait->m_pLicDB;
 
-	DbLic_TodayHyphen(szDay);			/* cc_nasupload_fail 비교값 (결정 B12 소스 형식) */
+	DbLic_Today8(szDay);				/* cc_nasupload_fail 비교값: 원본 :812 sprintf("%04d%02d%02d") = YYYYMMDD (B12 정정 2026-10-14, 운영값 20240822 와 동일 형식) */
 	Framing_StrSplit(pItem->buff, szResult, (char)PKT_SEP);
 	nIndex = atoi(szResult[0]);
 	nType = atoi(szResult[1]);
@@ -423,16 +470,21 @@ void EventUdpProc(CRecvWait *pWait, SOCK_RECV_WAIT *pItem)
 		  case SEND_TYPE_LINK_CHECK:							/* :1016 ACK 없음 */
 			nCnt = DbLic_SiteCountLinkError(pDB, szIP, szRealIP);
 			if(nCnt > 0){
-				nprintf(szMsg, 1023, AlarmText(TXT_LINK_RETURN), szSiteName, szUseIP);
-				strcpy_st(szTempCode, "linkDataReturn001");
-				AlarmWebTh_EmailPush(pDB, SEND_TYPE_NET_SUCC, szIP, szRealIP, szSiteName, szMsg, "");
+				if(SilentSite_Remove(szIP, szRealIP) == TRUE){
+					/* 재시작 직후 알림 없이 Y 로 둔 사이트: 상태만 N 으로 되돌리고 복구 알림은 내지 않는다 */
+					OnlicLogf(LOG_ALARM, "LinkCheck return (startup silent, no alarm) ip:%s rip:%s", szIP, szRealIP);
+				}else{
+					nprintf(szMsg, 1023, AlarmText(TXT_LINK_RETURN), szSiteName, szUseIP);
+					strcpy_st(szTempCode, "linkDataReturn001");
+					AlarmWebTh_EmailPush(pDB, SEND_TYPE_NET_SUCC, szIP, szRealIP, szSiteName, szMsg, "");
+				}
 			}
 			{ char szDate[21] = ""; DbLic_Now14(szDate); DbLic_UpdateTimeSite(pDB, szDate, szIP, szRealIP); }
 			nIsEmergency = TRUE;
 			break;
 		  case SEND_TYPE_NAS_CON_FAIL:							/* :1035 */
 			nNasFailCnt = DbLic_GetNasFailCnt(pDB, szIP, szRealIP);
-			if(nNasFailCnt < 0) nNasFailCnt = 0;				/* GetUnsignedIntValue 실패(-1) → 원본은 -1 그대로 ++ → 0. 동일 결과 */
+			/* 읽기 실패(-1) 는 원본 그대로 둔다: -1 → ++ → 0 저장, "(0회)" 문구 (B7, 2026-10-14) */
 			if(nNasFailCnt > 0) nIsEmergency = TRUE;			/* 최초 1회는 긴급 아님 */
 			if(nNasFailCnt > sys_conf.nas_fail_count_max) nNasFailCnt = sys_conf.nas_fail_count_max;
 			++nNasFailCnt;
@@ -574,11 +626,15 @@ void LinkCheck_OnTimer()
 {
 	static CDirectODBC *s_pLicDB = NULL, *s_pAtalkDB = NULL, *s_pSmsDB = NULL;
 	static int s_bInit = FALSE;
+	static int64_t s_tStart = 0;
+	static char s_szInitDate[21] = "";
+	int bSilent = FALSE;
 	CC_LINKINFO *pCCLink = NULL;
 	SMS_SITE_USERS *pUsers = NULL;
 	char szDate[21] = "", szLocalDay[21] = "", szMsg[1024] = "", szUsers[2048] = "", szUseIP[200] = "";
 	const char *szSiteName = NULL;
 	int i = 0, nCnt = 0, nUserCnt = 0;
+	long lRows = 0;
 
 	if(onlic_start != TRUE) return;
 
@@ -600,14 +656,32 @@ void LinkCheck_OnTimer()
 	if(s_bInit == FALSE){												/* :1440 최초 1회: 정상 사이트 기준시각 초기화 */
 		DbLic_UpdateTimeNotError(s_pLicDB, szDate);
 		s_bInit = TRUE;
+		s_tStart = GetMilliSencondProc();
+		strcpy_st(s_szInitDate, szDate);									/* 초기화에 쓴 값. 이 값 그대로인 사이트 = 재시작 후 수신 0회 */
+		OnlicLogf(LOG_ALARM, "LinkCheck start: error after %d min, startup silent window %d min", sys_conf.link_error_after_min, sys_conf.startup_silent_min);
 	}
+	/* 기동 후 STARTUP_SILENT_MIN 안에 판정되는 장애 = 재시작 전부터 수신이 없던 사이트 → 알림 없이 상태만 기록 (신규 2026-10-14) */
+	bSilent = (sys_conf.startup_silent_min > 0 && (GetMilliSencondProc() - s_tStart) < (int64_t)sys_conf.startup_silent_min * 60 * 1000) ? TRUE : FALSE;
 	DbLic_AgoMinute14(sys_conf.link_error_after_min, szLocalDay);		/* :1445 GetAgoTimeProc(21) */
 
 	nCnt = DbLic_GetLinkErrorSites(s_pLicDB, szLocalDay, &pCCLink);	/* :1447-1458 */
 	if(nCnt <= 0 || pCCLink == NULL) return;
 
 	for(i = 0; i < nCnt; i++){
+		/* :1523 cc_link_error='Y' 전이를 먼저 수행 (원본은 알람 뒤). UDP 워커가 그 사이 LINK_CHECK 로 cc_update_time 을 갱신했으면
+		** UPDATE 의 cc_update_time<=기준시각 조건이 걸려 0행 → 가짜 장애/복구 알람을 내지 않는다 (B6, 2026-10-14). DB 오류(-1) 는 원본대로 알람 진행 */
+		lRows = DbLic_SetLinkError(s_pLicDB, pCCLink[i].cc_ip, pCCLink[i].cc_real_ip, szLocalDay);
+		if(lRows == 0){
+			OnlicLogf(LOG_ALARM, "LinkCheck skip (updated meanwhile) idx:%d ip:%s rip:%s", pCCLink[i].cc_index, pCCLink[i].cc_ip, pCCLink[i].cc_real_ip);
+			continue;
+		}
 		szSiteName = (strlen_st(pCCLink[i].cc_site_name) > 0) ? pCCLink[i].cc_site_name : pCCLink[i].cc_name;
+		/* 창 안이어도 재시작 후 한 번이라도 LINK_CHECK 를 보낸 사이트(cc_update_time 이 초기화값과 다름)는 정상 알림 */
+		if(bSilent == TRUE && DbLic_SiteCountUpdateTime(s_pLicDB, pCCLink[i].cc_ip, pCCLink[i].cc_real_ip, s_szInitDate) > 0){
+			SilentSite_Add(pCCLink[i].cc_ip, pCCLink[i].cc_real_ip);
+			OnlicLogf(LOG_ALARM, "LinkCheck startup silent (no alarm) idx:%d name:%s ip:%s rip:%s", pCCLink[i].cc_index, szSiteName, pCCLink[i].cc_ip, pCCLink[i].cc_real_ip);
+			continue;
+		}
 		if(strcmp(pCCLink[i].cc_ip, pCCLink[i].cc_real_ip) == 0) strcpy_st(szUseIP, pCCLink[i].cc_ip);
 		else nprintf(szUseIP, 199, "%s(%s)", pCCLink[i].cc_real_ip, pCCLink[i].cc_ip);
 
@@ -623,7 +697,6 @@ void LinkCheck_OnTimer()
 			SmsSendUsers(s_pSmsDB, "장애발생", szMsg, nUserCnt, szUsers);
 			delete [] pUsers; pUsers = NULL;
 		}
-		DbLic_SetLinkError(s_pLicDB, pCCLink[i].cc_ip, pCCLink[i].cc_real_ip);						/* :1523 */
 		AlarmWebTh_EmailPush(s_pLicDB, SEND_TYPE_NET_ERROR, pCCLink[i].cc_ip, pCCLink[i].cc_real_ip, pCCLink[i].cc_name, "", "");	/* :1525 */
 	}
 	delete [] pCCLink;

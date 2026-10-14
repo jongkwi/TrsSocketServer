@@ -111,13 +111,14 @@ int Framing_CutSTX_ETX(char *data, int startPos, int endPos, FRAME_CALLBACK cb, 
 
 /*
 **	원본 ReadUdpMsgProc(:541-568) : datagram 1개에서 첫 프레임만. 잔여 없음
+**	반환: payload 길이(빈 프레임 STX ETX 는 0), 프레임 없음(STX/ETX 없거나 ETX 가 STX 앞) 은 -1
 */
 int Framing_UdpExtract(const char *szRdata, char *szPayload, int nPayloadSize)
 {
 	int startPos = -1, endPos = -1, len = 0;
 	char rdata[MAXLENGTH+1];
 
-	if(szRdata == NULL || szPayload == NULL || nPayloadSize <= 0) return 0;
+	if(szRdata == NULL || szPayload == NULL || nPayloadSize <= 0) return -1;
 	szPayload[0] = 0;
 	memset(rdata, 0, sizeof(rdata));
 	strncpy(rdata, szRdata, MAXLENGTH);
@@ -129,7 +130,7 @@ int Framing_UdpExtract(const char *szRdata, char *szPayload, int nPayloadSize)
 		strncpy(szPayload, rdata + startPos + 1, len - 2); szPayload[len - 2] = 0;
 		return len - 2;
 	}
-	return 0;
+	return -1;
 }
 
 /*

@@ -2,10 +2,12 @@
 # onlic (TrsSocketServer Linux port) 64bit build - same layout as onmw_3.10.79/linux/Makefile_64bit_curl
 #   - no -D_UTF8 (CP949 kept), app name onlic, app headers in ../include/onlic
 #   - libcurl is required (web push / mail), so -D_CURL and -lcurl are always on
+#   - the 5 static libs are linked inside --start-group/--end-group: libtimerobject needs Malloc() from libshare_lib (2026-10-14)
 # usage: make -f Makefile_64bit          (libs + app)
 #        make -f Makefile_64bit onlic    (app only, libs already built)
 
 all:
+	mkdir -p ../bin ../lib ../log
 	rm -f *.o
 	rm -f ../lib/*.a
 
@@ -24,10 +26,11 @@ all:
 	g++ -D_UNIX -D_LINUX -D_DB_TYPE_POSTGRES -D_64BIT -D_CURL -I/usr/include -I/usr/local/include -I/usr/local/odbc/include -I/usr/include -I../include -I../include/TimerObject -L/usr/lib -L/usr/local/lib -L/usr/local/odbc/lib -L../lib -O2 -static -fpic -g -c ../source/TimerObject/*.cpp
 	ar rcs ../lib/libtimerobject.a TimerObject.o
 
-	g++ -D_UNIX -D_LINUX -D_SOCK_SELECT -D_DB_TYPE_POSTGRES -D_64BIT -D_CURL -I/usr/include -I/usr/local/include -I/usr/local/odbc/include -I/usr/include -I../include -I../include/onlic -L/usr/lib -L/usr/local/lib -L/usr/local/odbc/lib -L../lib -g -O2 -fpic -o ../bin/onlic ../source/onlic/*.cpp -llist_object -llog_object -lshare_lib -ltimerobject -lurl_en_de -lodbc -lcurl -lrt -lpthread
+	g++ -D_UNIX -D_LINUX -D_SOCK_SELECT -D_DB_TYPE_POSTGRES -D_64BIT -D_CURL -I/usr/include -I/usr/local/include -I/usr/local/odbc/include -I/usr/include -I../include -I../include/onlic -L/usr/lib -L/usr/local/lib -L/usr/local/odbc/lib -L../lib -g -O2 -fpic -o ../bin/onlic ../source/onlic/*.cpp -Wl,--start-group -llist_object -llog_object -ltimerobject -lurl_en_de -lshare_lib -Wl,--end-group -lodbc -lcurl -lrt -lpthread
 
 onlic:
-	g++ -D_UNIX -D_LINUX -D_SOCK_SELECT -D_DB_TYPE_POSTGRES -D_64BIT -D_CURL -I/usr/include -I/usr/local/include -I/usr/local/odbc/include -I/usr/include -I../include -I../include/onlic -L/usr/lib -L/usr/local/lib -L/usr/local/odbc/lib -L../lib -g -O2 -fpic -o ../bin/onlic ../source/onlic/*.cpp -llist_object -llog_object -lshare_lib -ltimerobject -lurl_en_de -lodbc -lcurl -lrt -lpthread
+	mkdir -p ../bin ../lib ../log
+	g++ -D_UNIX -D_LINUX -D_SOCK_SELECT -D_DB_TYPE_POSTGRES -D_64BIT -D_CURL -I/usr/include -I/usr/local/include -I/usr/local/odbc/include -I/usr/include -I../include -I../include/onlic -L/usr/lib -L/usr/local/lib -L/usr/local/odbc/lib -L../lib -g -O2 -fpic -o ../bin/onlic ../source/onlic/*.cpp -Wl,--start-group -llist_object -llog_object -ltimerobject -lurl_en_de -lshare_lib -Wl,--end-group -lodbc -lcurl -lrt -lpthread
 
 clean:
 	rm -f *.o ../lib/*.a ../bin/onlic

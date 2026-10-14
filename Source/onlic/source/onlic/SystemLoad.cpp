@@ -81,10 +81,10 @@ int CSystemLoad::StartSystem(const char *szConfig)
 		HttpWaitStackInit();
 	}
 
-	/* 8. 리슨 소켓 (5단계 SocketThread) */
+	/* 8. 리슨 소켓 (5단계 SocketThread). 포트 점유 등은 stdout 에도 출력 (L7) */
 	if(LoadSocketProc() <= FALSE){
 		nRet = SYSTEMLOAD_SOCK_ERROR;
-		PrintSystemError(nRet, LOG_YN_FILE);
+		PrintSystemError(nRet, LOG_YN_PRINT);
 		return nRet;
 	}
 
@@ -117,6 +117,10 @@ int CSystemLoad::GetConfigFileFatchProc()
 	cfg.GetConfigInfoProc(CFG_ROLE_LINK_CHECK,	sys_conf.role_link_check);
 
 	cfg.GetConfigInfoProc(CFG_LOG_PATH,			sys_conf.log_path);
+	if(strlen_st(sys_conf.log_path) > LOG_PATH_MAX_LEN){	/* CLogObject m_log_path[100] + "/run_YYYY-MM-DD_LIC.log" (L3) */
+		printf("[PATH_CONF] LOG_PATH too long (%d > %d): %s\n", (int)strlen_st(sys_conf.log_path), LOG_PATH_MAX_LEN, sys_conf.log_path);
+		return SYSTEMLOAD_CONFIG_FILE_ERROR;
+	}
 	cfg.GetConfigInfoProc(CFG_LOG_AGO_DAY,		sys_conf.log_ago_day);
 	cfg.GetConfigInfoProc(CFG_PID_FILE,			sys_conf.pid_file);
 
@@ -135,12 +139,18 @@ int CSystemLoad::GetConfigFileFatchProc()
 	cfg.GetConfigInfoProc(CFG_STATEMENT_TIMEOUT, sys_conf.statement_timeout);
 	cfg.GetConfigInfoProc(CFG_CLIENT_ENCODING,	sys_conf.client_encoding);
 	sys_conf.db_lic.lStatementTimeout = sys_conf.db_atalk.lStatementTimeout = sys_conf.db_sms.lStatementTimeout = sys_conf.statement_timeout;
+	/* 로그인 타임아웃: LIC 는 6321 응답 5초 제한 때문에 5초, 나머지는 Windows 와 같은 30초 (B5) */
+	sys_conf.db_lic.lLoginTimeout = 5;
+	sys_conf.db_atalk.lLoginTimeout = sys_conf.db_sms.lLoginTimeout = DB_LOGIN_TIMEOUT_SEC;
+	sys_conf.db_lic.nDbType = sys_conf.db_atalk.nDbType = DB_TYPE_PG;
+	cfg.GetConfigInfoProc(CFG_SMS_DB_TYPE,		sys_conf.db_sms.nDbType);		/* 기본 MSSQL (Windows onpia_sms=tcssdk). SMS Agent 를 PG 에 두면 0 */
 
 	cfg.GetConfigInfoProc(CFG_LINK_CHECK_PERIOD_SEC,	sys_conf.link_check_period_sec);
 	cfg.GetConfigInfoProc(CFG_LINK_ERROR_AFTER_MIN,		sys_conf.link_error_after_min);
 	cfg.GetConfigInfoProc(CFG_NEW_SITE_SKIP_HOUR,		sys_conf.new_site_skip_hour);
 	cfg.GetConfigInfoProc(CFG_NAS_FAIL_NOTIFY_MAX,		sys_conf.nas_fail_notify_max);
 	cfg.GetConfigInfoProc(CFG_NAS_FAIL_COUNT_MAX,		sys_conf.nas_fail_count_max);
+	cfg.GetConfigInfoProc(CFG_STARTUP_SILENT_MIN,		sys_conf.startup_silent_min);
 
 	cfg.GetConfigInfoProc(CFG_ATALK_USE,		sys_conf.atalk_use);
 	cfg.GetConfigInfoProc(CFG_ATALK_SENDER_KEY,	sys_conf.atalk_sender_key);
@@ -278,6 +288,10 @@ void CSystemLoad::LogObj_Create()
 
 	/* 로그 객체 생성 전이라 이 호출은 파일에 남지 않음 */
 	GetPrivateProfileStringUsr((char*)"PATH_CONF", (char*)"LOG_PATH", "../log", szPath, 255, (char*)m_szConfig);
+	if(strlen_st(szPath) > LOG_PATH_MAX_LEN){		/* 로그 라이브러리 버퍼(100) 보호. 설정 단계에서 CONFIG 오류로 중단됨 (L3) */
+		printf("[PATH_CONF] LOG_PATH too long (%d > %d), using ../log for startup messages\n", (int)strlen_st(szPath), LOG_PATH_MAX_LEN);
+		strcpy_st(szPath, "../log");
+	}
 	strcpy_st(m_szLogPath, szPath);
 
 	lic_log_object = new CLogObject();			/* onmw 는 Malloc (생성자 미실행 결함) */
@@ -360,7 +374,7 @@ void CSystemLoad::KillSystemMemory()
 void OnlicLog(int nLogType, const char* szLog)
 {
 	if(lic_log_object != NULL) lic_log_object->LogObjectPush((char*)szLog, nLogType, LOG_YN_FILE);
-	else if(sys_load.m_nLogView == TRUE){ printf("%s\n", szLog); fflush(stdout); }
+	if(sys_load.m_nLogView == TRUE){ printf("%s\n", szLog); fflush(stdout); }	/* -l : 로그 객체 유무와 관계없이 화면에도 (L8) */
 }
 
 void OnlicLogf(int nLogType, const char* fmt, ...)
@@ -368,7 +382,7 @@ void OnlicLogf(int nLogType, const char* fmt, ...)
 	char szLog[MAX_LOG_CHAR+1] = "";
 	va_list ap;
 	va_start(ap, fmt);
-	vsnprintf(szLog, MAX_LOG_CHAR, fmt, ap);
+	vsnprintf(szLog, MAX_LOG_CHAR - 32, fmt, ap);	/* LogObjectPush 가 시각(20)+CRLF 를 덧붙여 szLog[4201] 에 넣으므로 여유 (L9) */
 	va_end(ap);
 	OnlicLog(nLogType, szLog);
 }

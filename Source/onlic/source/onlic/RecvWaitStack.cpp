@@ -202,14 +202,23 @@ int CRecvWait::GetListCount()
 void CRecvWait::Kill()
 {
 	int i = 0;
+	pthread_t tid = 0;
 	if(m_run != TRUE) return;
 	m_bExit = TRUE;
 	Pthread_mutex_lock(&m_mutex);
 	m_sig_action = TRUE; ++m_sig_count;
 	Pthread_mutex_unlock(&m_mutex);
 	Pthread_cond_signal(&m_cond);
-	for(i = 0; i < 30; i++){ if(m_wait_pid == 0) break; WaitMSleep(100); }
-	if(m_wait_pid != 0){ Pthread_kill(&m_wait_pid, SIGINT); m_wait_pid = 0; }
+	/* 워커가 DB 호출 중일 수 있다 (로그인 30초 + 문장 10초). 종료를 기다려 join 한다 (L5).
+	** 45초가 지나도 안 끝나면 핸들러가 아직 DB 핸들을 쓰는 중이므로 해제하지 않고 둔다 (use-after-free 방지, 프로세스 종료 시 회수) */
+	tid = m_wait_pid;
+	for(i = 0; i < 450; i++){ if(m_wait_pid == 0) break; WaitMSleep(100); }
+	if(m_wait_pid != 0){
+		OnlicLogf(LOG_SOFT, "[%s] worker did not exit in 45s - queue/DB handles left for process exit", m_szName);
+		m_run = FALSE;
+		return;
+	}
+	if(tid != 0) pthread_join(tid, NULL);
 	m_run = FALSE;
 	if(m_list != NULL){ m_list->clear(); delete m_list; m_list = NULL; }
 	if(m_pLicDB != NULL){ m_pLicDB->DisConnectODBC(); delete m_pLicDB; m_pLicDB = NULL; }

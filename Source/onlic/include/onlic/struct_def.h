@@ -62,12 +62,16 @@ typedef struct {
 } SMS_EXCLUDE;
 
 /* ---------------- 설정 ---------------- */
+#define DB_TYPE_PG			0		/* PostgreSQL (client_encoding / statement_timeout 세션 설정) */
+#define DB_TYPE_MSSQL		1		/* MSSQL(FreeTDS) - PG 세션 설정을 보내지 않음 */
 typedef struct {
 	char	szDSN[51];
 	char	szUID[51];
 	char	szPWD[51];
 	char	szName[31];				/* 로그 표시용 */
 	long	lStatementTimeout;
+	long	lLoginTimeout;			/* SQL_ATTR_LOGIN_TIMEOUT 초. LIC 5 (6321 응답 5초 제한), 그 외 30 */
+	int		nDbType;				/* DB_TYPE_PG / DB_TYPE_MSSQL */
 } DATABASEINFO;
 
 typedef struct {
@@ -96,6 +100,7 @@ typedef struct {
 	int		new_site_skip_hour;		/* 3 */
 	int		nas_fail_notify_max;	/* 10 */
 	int		nas_fail_count_max;		/* 999 */
+	int		startup_silent_min;		/* 26: 기동 후 이 시간 안에 판정된 링크 장애는 알림 없이 상태만 기록 (0=끔, 신규 2026-10-14) */
 	/* [ATALK] */
 	int		atalk_use;
 	char	atalk_sender_key[101];
@@ -133,6 +138,7 @@ typedef struct {
 	int					sock_seq;
 	int64_t				sock_time;		/* 접속 시각 (ms) */
 	int64_t				last_recv_time;	/* 마지막 수신 (ms) - 유휴 타임아웃용 */
+	int					pending;		/* 워커에 넘긴 뒤 응답 대기 중인 요청 수 (유휴 정리 제외 조건) */
 	/* Windows CClientSocket::m_Rdata[MAXLENGTH*2+1] : 세션별 잔여 버퍼 (onmw 의 공유 버퍼 결함을 피함) */
 	char				rdata[RESIDUAL_MAX+1];
 	int					rlen;
@@ -141,7 +147,8 @@ typedef struct {
 /* ---------------- 워커 큐 항목 (onmw SOCK_RECV_WAIT) ---------------- */
 typedef struct {
 	ONLIC_SOCKET*		sock;			/* TCP 세션 (UDP 는 NULL). 워커에서는 역참조하지 말 것 (소켓 스레드가 해제할 수 있음) */
-	int					handle;			/* 응답 송신용 fd 사본 */
+	int					handle;			/* 응답 송신용 fd 사본 (Lic_SendResponse 에서 sock_seq 와 함께 검증) */
+	int					sock_seq;		/* 세션 일련번호 사본 */
 	int					port_type;
 	struct sockaddr_in	remote_sa;		/* UDP echo ACK 용 */
 	char				remote_ip[51];
@@ -160,6 +167,7 @@ typedef struct {
 /* ---------------- 외부 HTTP 알림 큐 항목 (AlramWeb.h ALRAM_OBJ 축약) ---------------- */
 typedef struct {
 	int		ao_type;				/* AR_ALERT(웹푸시) / AR_EMAIL */
+	int		alert_type;				/* 알림타입 (AlramWeb.h:30, 저장만 하고 읽지 않음 - 원본 동일) */
 	char	ao_msg[1024];
 	char	szEMail_to[501];
 	char	szEMail_from[201];

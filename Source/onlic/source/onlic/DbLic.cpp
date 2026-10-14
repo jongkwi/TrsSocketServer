@@ -26,12 +26,6 @@ void DbLic_Today8(char *szOut)
 	sprintf(szOut, "%04d%02d%02d", t.tm_year+1900, t.tm_mon+1, t.tm_mday);
 }
 
-void DbLic_TodayHyphen(char *szOut)
-{
-	struct tm t; DbLic_LocalTm(t, 0);
-	sprintf(szOut, "%04d-%02d-%02d", t.tm_year+1900, t.tm_mon+1, t.tm_mday);
-}
-
 /* Windows GetAgoTimeProc(:1545): 현재 - nAgoMinute 분 */
 void DbLic_AgoMinute14(int nAgoMinute, char *szOut)
 {
@@ -124,6 +118,16 @@ int DbLic_UpdateTimeAll(CDirectODBC *pDB, const char *szDate14)
 }
 
 /* :1441 UPDATE CallCenter_Link SET cc_update_time='%s' where cc_link_error='N' AND cc_use='Y' (LINK_TIMER 최초 1회) */
+/* 재시작 무알림 판정용: cc_update_time 이 기동 초기화 시각 그대로(= 재시작 후 LINK_CHECK 0회)인 사이트 수 (신규 2026-10-14) */
+long DbLic_SiteCountUpdateTime(CDirectODBC *pDB, const char *szIP, const char *szRealIP, const char *szDate14)
+{
+	char q[MAX_QUERY+1] = "", eIP[ESC_LEN] = "", eReal[ESC_LEN] = "", eDate[ESC_LEN] = "";
+	if(pDB == NULL) return -1;
+	ESC(szIP, eIP); ESC(szRealIP, eReal); ESC(szDate14, eDate);
+	nprintf(q, MAX_QUERY, "SELECT Count(cc_ip) FROM CallCenter_Link where cc_ip='%s' AND cc_real_ip='%s' AND cc_use='Y' AND cc_update_time='%s'", eIP, eReal, eDate);
+	return pDB->RowCount(q);
+}
+
 int DbLic_UpdateTimeNotError(CDirectODBC *pDB, const char *szDate14)
 {
 	char q[MAX_QUERY+1] = "";
@@ -143,13 +147,14 @@ int DbLic_UpdateTimeSite(CDirectODBC *pDB, const char *szDate14, const char *szI
 }
 
 /* :1523 UPDATE CallCenter_Link SET cc_link_error='Y' where cc_ip='%s' AND cc_real_ip='%s' AND cc_use='Y' */
-int DbLic_SetLinkError(CDirectODBC *pDB, const char *szIP, const char *szRealIP)
+/* 반환: 갱신 행 수(0 = 그 사이 cc_update_time 이 갱신되어 더 이상 장애 아님), -1 = DB 오류. szLocalDay14 = 타이머가 조회한 기준시각 */
+long DbLic_SetLinkError(CDirectODBC *pDB, const char *szIP, const char *szRealIP, const char *szLocalDay14)
 {
-	char q[MAX_QUERY+1] = "", eIP[ESC_LEN] = "", eReal[ESC_LEN] = "";
-	if(pDB == NULL) return FALSE;
-	ESC(szIP, eIP); ESC(szRealIP, eReal);
-	nprintf(q, MAX_QUERY, "UPDATE CallCenter_Link SET cc_link_error='Y' where cc_ip='%s' AND cc_real_ip='%s' AND cc_use='Y'", eIP, eReal);
-	return pDB->ExecSql(q);
+	char q[MAX_QUERY+1] = "", eIP[ESC_LEN] = "", eReal[ESC_LEN] = "", eDay[ESC_LEN] = "";
+	if(pDB == NULL) return -1;
+	ESC(szIP, eIP); ESC(szRealIP, eReal); ESC(szLocalDay14, eDay);
+	nprintf(q, MAX_QUERY, "UPDATE CallCenter_Link SET cc_link_error='Y' where cc_ip='%s' AND cc_real_ip='%s' AND cc_use='Y' AND cc_link_error='N' AND cc_update_time<='%s'", eIP, eReal, eDay);
+	return pDB->ExecSqlRows(q);
 }
 
 /* :1447 SELECT COUNT(cc_ip) FROM CallCenter_Link where cc_update_time<='%s' AND cc_link_error='N' AND cc_use='Y' */
